@@ -1,0 +1,23 @@
+server:
+  port: 0
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:1/.well-known/jwks.json
+  cloud:
+    gateway:
+      routes:
+        - id: test-route
+          uri: http://localhost:${wiremock.server.port:8081}
+          predicates:
+            - Path=/api/v1/**
+          filters:
+            - StripPrefix=1
+
+logging:
+  level:
+    root: INFO
+    gateway: DEBUG

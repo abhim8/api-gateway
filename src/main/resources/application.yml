@@ -1,0 +1,67 @@
+server:
+  port: 8080
+  shutdown: graceful
+  netty:
+    connection-timeout: 5s
+
+spring:
+  application:
+    name: api-gateway
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  codec:
+    max-in-memory-size: 256KB
+
+  cloud:
+    gateway:
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${GATEWAY_CORS_ORIGINS:https://app.example.com}
+            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+            allowedHeaders: Authorization,Content-Type,X-Correlation-ID
+            allowCredentials: true
+            maxAge: 1800
+      httpclient:
+        response-timeout: 5s
+        connect-timeout: 3s
+        pool:
+          type: ELASTIC
+          max-connections: 500
+          max-idle-time: 60s
+      routes:
+        - id: example
+          uri: http://example-service:8080
+          predicates:
+            - Path=/api/v1/example/**
+          filters:
+            - StripPrefix=1
+          metadata:
+            response-timeout: 5000
+
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:https://auth.example.com}
+          jwk-set-uri: ${JWKS_URI:https://auth.example.com/.well-known/jwks.json}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+logging:
+  level:
+    root: INFO
+    gateway: DEBUG
