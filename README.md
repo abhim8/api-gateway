@@ -19,7 +19,7 @@ The API Gateway is the single entry point for all external traffic into the plat
 
 - Authorization (JWT, OAuth2, API keys) - authentication is pluggable but no authorization layer is implemented
 - TLS termination - delegated to the Kubernetes ingress
-- Dynamic route management - requires Redis, not currently integrated
+- Dynamic route management - routes are declared statically in YAML; dynamic route updates via API are not implemented
 
 ## Key Features
 
@@ -59,7 +59,7 @@ graph TB
     Gateway -.-> Logging
 ```
 
-The gateway is stateless - every pod is identical. No Redis, no database, no local state. Authentication is delegated to a pluggable `AuthenticationProvider` abstraction with two implementations: `MockAuthenticationProvider` (always authenticates) and `RemoteAuthenticationProvider` (delegates to an external service).
+Gateway pods are stateless and horizontally scalable - each pod is identical. Redis is used as an external dependency for rate-limiting state only; there is no database or local state within the gateway process. Authentication is delegated to a pluggable `AuthenticationProvider` abstraction with two implementations: `MockAuthenticationProvider` (always authenticates) and `RemoteAuthenticationProvider` (delegates to an external service).
 
 ## Request Lifecycle
 
@@ -368,15 +368,13 @@ The `GatewayKeyResolver` resolves the rate limit key in the following order, sto
 | `gateway.rate-limit.deny-empty-key` | `true` | Whether to deny requests with an empty rate limit key |
 | `gateway.rate-limit.empty-key-status` | `401` | HTTP status returned when empty key is denied |
 
-### Prerequisites (Redis)
+### Redis Configuration
 
-The `RedisRateLimiter` requires a running Redis instance and the following beans in the application context:
+The `RedisRateLimiter` requires a running Redis instance. The following beans are already configured in `RedisConfig` (`gateway.config`):
 
-- `LettuceConnectionFactory` (or `RedisConnectionFactory`)
-- `ReactiveRedisTemplate<String, String>`
-- `StringRedisTemplate`
-
-The `spring-boot-starter-data-redis-reactive` dependency is already included. Production-grade Redis configuration (`LettuceConnectionFactory`, connection pooling, TLS, serializers) is deferred to a separate `RedisConfig` class - see `gateway.config.RedisConfig` for the expected integration contract.
+- `LettuceConnectionFactory` - standalone (`local` profile) or cluster with TLS (`!local` profile)
+- `RedisTemplate<String, String>` - with `StringRedisSerializer` and a JSON-capable default serializer
+- `RedisSerializer<Object>` - custom Jackson-based serializer with type metadata
 
 ### Enabling Rate Limiting
 
@@ -559,9 +557,3 @@ A Postman collection is available at `docs/postman/api-gateway.postman_collectio
 | Authentication | Requests requiring authentication (gateway authenticates before proxying) |
 | Gateway | Requests proxied to downstream services through configured routes |
 | Fallback | Local fallback endpoints invoked when a circuit breaker is open |
-
-## Current Limitations
-
-- No authorization layer (JWT validation, OAuth2, API keys, roles, permissions)
-- No dynamic route management (requires Redis)
-
