@@ -264,7 +264,18 @@ OpenTelemetry Java agent auto-instruments the Netty HTTP server and client at ru
 
 ### Correlation IDs
 
-`CorrelationIdGlobalFilter` (order -100) generates an `X-Correlation-ID` if the request does not already carry one. The value is populated into the MDC as `correlationId` and appears in all structured log entries.
+`CorrelationIdGlobalFilter` (order -100) generates an `X-Correlation-ID` if the request does not already carry one. The value is populated into the MDC as `correlationId`, propagated to downstream services as a request header, and returned to the client as a response header.
+
+Response header injection is configurable under `gateway.observability.response-headers`:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `gateway.observability.response-headers.enabled` | `true` | Master switch for all response header injection |
+| `gateway.observability.response-headers.correlation-id` | `true` | Whether to write `X-Correlation-ID` to the response |
+
+When both are true, the filter registers a `response.beforeCommit` callback that sets the `X-Correlation-ID` response header exactly once. When disabled, no callback is registered and the header is omitted from the response.
+
+The correlation ID is always propagated to downstream services as a request header regardless of this setting, and the exchange attribute and Reactor context are always populated.
 
 ### Request Timing
 

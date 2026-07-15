@@ -71,6 +71,10 @@ gateway:
     request-timing:
       enabled: true
       slow-request-threshold: 1000ms
+  observability:
+    response-headers:
+      enabled: true
+      correlation-id: true
 
 logging:
   level:

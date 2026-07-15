@@ -7,7 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@EnableConfigurationProperties(RequestTimingProperties.class)
+@EnableConfigurationProperties({RequestTimingProperties.class, ResponseHeadersProperties.class})
 public class ObservabilityConfiguration {
 
     @Bean

@@ -1,6 +1,7 @@
 package gateway.filter;
 
 import gateway.common.util.HeaderConstants;
+import gateway.observability.ResponseHeadersProperties;
 import io.opentelemetry.api.trace.Span;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,12 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
 
+    private final ResponseHeadersProperties responseHeadersProperties;
+
+    public CorrelationIdGlobalFilter(ResponseHeadersProperties responseHeadersProperties) {
+        this.responseHeadersProperties = responseHeadersProperties;
+    }
+
     @Override
     public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, GatewayFilterChain chain) {
         log.debug("Entering CorrelationIdGlobalFilter");
@@ -36,10 +43,13 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                 .response(exchange.getResponse())
                 .build();
 
-        mutatedExchange.getResponse().beforeCommit(() -> {
-            mutatedExchange.getResponse().getHeaders().add(HeaderConstants.X_CORRELATION_ID, correlationId);
-            return Mono.empty();
-        });
+        if (responseHeadersProperties.isEnabled() && responseHeadersProperties.isCorrelationId()) {
+            mutatedExchange.getResponse().beforeCommit(() -> {
+                mutatedExchange.getResponse().getHeaders().set(HeaderConstants.X_CORRELATION_ID, correlationId);
+                log.debug("Added X-Correlation-ID response header");
+                return Mono.empty();
+            });
+        }
 
         return chain.filter(mutatedExchange)
                 .contextWrite(ctx -> {
