@@ -9,11 +9,6 @@
       "key": "baseUrl",
       "value": "http://localhost:8000",
       "type": "string"
-    },
-    {
-      "key": "templateServiceBaseUrl",
-      "value": "http://localhost:8002",
-      "type": "string"
     }
   ],
   "item": [
@@ -114,8 +109,8 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{templateServiceBaseUrl}}/api/v1/templates",
-                  "host": ["{{templateServiceBaseUrl}}"],
+                  "raw": "{{baseUrl}}/api/v1/templates",
+                  "host": ["{{baseUrl}}"],
                   "path": ["api", "v1", "templates"]
                 }
               },
