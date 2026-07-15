@@ -1,8 +1,9 @@
-# API Gateway — Software Design Document (Revised V1)
+# API Gateway — Software Design Document
 
 > **Project**: API Gateway — front-door proxy for a microservices platform
-> **Version**: 1.0 (Revised)
-> **Status**: Approved for implementation
+> **Version**: 1.0
+> **Java**: 26
+> **Runtime**: Spring Cloud Gateway 5.x / Spring Boot 4.x / Netty / WebFlux / Reactor
 
 ---
 
@@ -16,91 +17,23 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 
 | Goal | How |
 |------|-----|
-| **Security-first** | Every request goes through an AuthenticationProvider; delegate to Auth Platform (future) |
+| **Security-first** | Every request goes through an `AuthenticationProvider`; never bypassed |
 | **Resilient by default** | Circuit breaker, retry, and timeout via SCG built-in filter factories |
 | **Observable** | Structured JSON logs, Micrometer metrics, OpenTelemetry traces |
 | **Operable** | Health probes, graceful shutdown, Docker ready |
-| **Maintainable** | Minimal custom code (~6 classes); everything else is YAML config |
+| **Maintainable** | Minimal custom code (~11 classes); everything else is YAML config |
+
+### Architecture Tenets
+
+1. **Stateless**: Zero local state. No Redis, no database. Every pod is identical.
+2. **Configuration over code**: SCG built-in filters handle 80% of requirements. Custom code is the exception.
+3. **Reactive end-to-end**: Netty event loop does all work — no thread pool blocking.
+4. **Fail-fast**: Expired or malformed requests are rejected immediately — no upstream round-trip.
+5. **Defend upstreams**: Circuit breakers, retries, and timeouts protect backend services from cascading failure.
 
 ---
 
-## 2. Scope and Non-goals
-
-### V1 Scope
-
-- HTTP(S) request routing to upstream services (static YAML routes)
-- Authentication delegated to the Auth Platform (remote service)
-- Correlation ID generation and propagation (`X-Correlation-ID`)
-- Structured JSON logging with MDC context (correlation ID, trace ID)
-- Micrometer metrics exposed via `/actuator/prometheus`
-- OpenTelemetry distributed tracing (auto-instrumentation via Java agent)
-- CORS (global and per-route)
-- Retry on transient upstream failures (SCG `RetryGatewayFilterFactory`)
-- Upstream call timeout (SCG route metadata `response-timeout`)
-- Circuit breaker with fallback (SCG `CircuitBreakerGatewayFilterFactory`)
-- Request/response header manipulation (SCG built-in filters)
-- Health + readiness probes (`/actuator/health`)
-- Docker image
-- Comprehensive test suite (unit + integration with WireMock)
-
-### Explicitly V2+
-
-| Feature | Reason |
-|---------|--------|
-| Dynamic route management (Redis) | Not needed until routes change without deploys |
-| API key authentication | Requires PostgreSQL — justified as V2 add-on |
-| Rate limiting | Requires Redis — significant infra dependency |
-| Admin CRUD endpoints | Operational tooling, not core routing |
-| PostgreSQL persistence | No feature in V1 needs it |
-| Feature flags | Solve a problem that doesn't exist yet |
-| Service discovery (Eureka/Consul) | K8s DNS is sufficient for V1 |
-| Canary releases / Blue-green | Deployment strategy, not gateway feature |
-| WebSocket / gRPC support | Out of V1 scope |
-| GraphQL gateway | Terminated upstream, not at gateway |
-| Traffic shadowing | V2 operational concern |
-| Plugin framework | "Framework" is a red flag — wait for actual extension need |
-
----
-
-## 3. Functional Requirements
-
-| ID | Requirement | How |
-|----|-------------|-----|
-| FR-01 | Route requests based on path, method, and headers | SCG YAML routes + predicates |
-| FR-02 | Validate JWT tokens on protected routes | RemoteAuthenticationProvider (delegates to Auth Platform) |
-| FR-03 | Apply circuit breaker per upstream route | SCG `CircuitBreakerGatewayFilterFactory` |
-| FR-04 | Retry failed upstream requests on transient errors | SCG `RetryGatewayFilterFactory` |
-| FR-05 | Enforce upstream request timeouts | Route metadata `response-timeout` |
-| FR-06 | Add, remove, and transform HTTP headers | SCG `AddRequestHeader`, `RemoveRequestHeader`, etc. |
-| FR-07 | Handle CORS preflight and origin validation | `spring.cloud.gateway.globalcors` |
-| FR-08 | Generate and propagate correlation IDs | Custom `CorrelationIdGlobalFilter` |
-| FR-09 | Emit structured JSON logs per request | Logstash encoder + MDC |
-| FR-10 | Expose health, readiness, and liveness endpoints | Spring Boot Actuator |
-| FR-11 | Expose Prometheus metrics | Micrometer + `micrometer-registry-prometheus` |
-| FR-12 | Distribute trace context to upstream services | OpenTelemetry auto-instrumentation |
-| FR-13 | Reject unauthenticated requests with 401 | Spring Security authorization rules |
-| FR-14 | Reject unauthorized requests with 403 | Spring Security role checks |
-| FR-15 | Reject excessively large request bodies | `spring.codec.max-in-memory-size` |
-
----
-
-## 4. Non-functional Requirements
-
-| ID | Requirement | Target | How |
-|----|-------------|--------|-----|
-| NFR-01 | **Latency overhead** | p99 < 10ms | Minimal custom filters; reactive end-to-end |
-| NFR-02 | **Throughput** | 3000+ req/s per pod (2 vCPU) | Netty event loop, no blocking |
-| NFR-03 | **Availability** | 99.9% (3-nines) | Stateless + K8s rolling update + HPA |
-| NFR-04 | **Startup time** | < 8 seconds | Spring Boot 4 optimizations, lazy init |
-| NFR-05 | **Graceful shutdown** | Drain in-flight, zero dropped | `server.shutdown=graceful` + preStop hook |
-| NFR-06 | **Security** | OWASP Top 10 | JWT validation, secure headers, input size limits |
-| NFR-07 | **Observability** | Every request logged + metered | Correlation ID + Micrometer + traces |
-| NFR-08 | **Resource limits** | CPU < 1.0 / mem < 384 MiB | Predictable cost profile |
-| NFR-09 | **Test coverage** | > 85% lines | Unit + integration tests with WireMock |
-
----
-
-## 5. High-level Architecture
+## 2. Architecture
 
 ```
                     ┌─────────────┐
@@ -116,16 +49,16 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
                            ▼
             ┌─────────────────────────────────┐
             │     API Gateway Pod (xN)        │
-            │  Spring Cloud Gateway 4.x       │
+            │  Spring Cloud Gateway 5.x       │
             │  Netty / WebFlux / Reactor      │
             │  Java 26                        │
             │                                 │
-             │  ┌─── Filter Pipeline ───────┐  │
-             │  │ CORS → Correlation →      │  │
-             │  │ Route Match → Resilience  │  │
-             │  │ → Proxy → Response        │  │
-             │  └───────────────────────────┘  │
-            └────┬────────┬────────┬──────────┘
+             │  ┌─── Filter Pipeline ───────┐ │
+             │  │ CORS → Correlation →      │ │
+             │  │ Auth → Route Match →      │ │
+             │  │ Resilience → Proxy → Resp │ │
+             │  └───────────────────────────┘ │
+            └────┬────────┬────────┬─────────┘
                  │        │        │
            ┌─────┘        │        └─────┐
            ▼              ▼              ▼
@@ -142,86 +75,18 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
      └─────────────────────────────────────┘
 ```
 
-### Architecture Tenets
+### Key Design Decisions
 
-1. **Stateless**: Zero local state. No Redis, no database. Every pod is identical.
-2. **Configuration over code**: SCG built-in filters handle 80% of requirements. Custom code is the exception.
-3. **Reactive end-to-end**: Netty event loop does all work — no thread pool blocking.
-4. **Fail-fast**: Expired or malformed requests are rejected immediately — no upstream round-trip.
-5. **Defend upstreams**: Circuit breakers, retries, and timeouts protect backend services from cascading failure.
-
----
-
-## 6. Component Diagram
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                    API Gateway (Pod)                      │
-│                                                           │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │           Authentication Pipeline                 │    │
-│  │  ┌────────────────────────────────────────────┐  │    │
-│  │  │  AuthenticationGlobalFilter                │  │    │
-│  │  │  ┌──────────────────────────────────────┐  │  │    │
-│  │  │  │  AuthenticationProvider (interface)   │  │  │    │
-│  │  │  │  ├─ MockAuthenticationProvider        │  │  │    │
-│  │  │  │  │    (always authenticated)           │  │  │    │
-│  │  │  │  └─ RemoteAuthenticationProvider       │  │  │    │
-│  │  │  │       (future Auth Platform call)      │  │  │    │
-│  │  │  └──────────────────────────────────────┘  │  │    │
-│  │  └────────────────────────────────────────────┘  │    │
-│  │  Always runs — every request, every route.       │    │
-│  └──────────────────────────────────────────────────┘    │
-│                                                           │
-│  ┌──────────────────────────────────────────────────┐    │
-│  │           SCG Filter Pipeline                    │    │
-│  │                                                  │    │
-│  │  Pre-filters:                                    │    │
-│  │    ├─ CorsGlobalFilter              (built-in)   │    │
-│  │    ├─ CorrelationIdGlobalFilter    (custom)     │    │
-│  │    └─ AuthenticationGlobalFilter    (custom)    │    │
-│  │                                                  │    │
-│  │  Route filters: (per-route YAML)                 │    │
-│  │    ├─ RetryGatewayFilterFactory     (built-in)   │    │
-│  │    ├─ CircuitBreakerFilterFactory  (built-in)    │    │
-│  │    ├─ AddRequestHeader             (built-in)    │    │
-│  │    ├─ RemoveResponseHeader         (built-in)    │    │
-│  │    └─ PrefixPath / RewritePath     (built-in)    │    │
-│  │                                                  │    │
-│  │  Post-filters:                                   │    │
-│  │    └─ (response handled by SCG)                  │    │
-│  └──────────────────────────────────────────────────┘    │
-│                                                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
-│  │Actuator  │  │Micrometer│  │ OTel     │               │
-│  │/health   │  │/prometheus│ │ Agent    │               │
-│  │/info     │  │          │  │(traces)  │               │
-│  └──────────┘  └──────────┘  └──────────┘               │
-└──────────────────────────────────────────────────────────┘
-```
-
-### Components
-
-| Component | Type | Responsibility |
-|-----------|------|----------------|
-| `AuthenticationGlobalFilter` | Custom `GlobalFilter` | Always runs authentication before routing |
-| `AuthenticationProvider` | Custom interface | Strategy interface for authentication |
-| `MockAuthenticationProvider` | Custom impl | Returns authenticated=true, no I/O |
-| `RemoteAuthenticationProvider` | Custom impl | Future Auth Platform call (not implemented) |
-| `AuthenticationResult` | Custom record | Auth result with subject, roles, permissions, claims |
-| `RouteLocator` | SCG built-in | Route matching from YAML definitions |
-| `CorrelationIdGlobalFilter` | Custom `GlobalFilter` | Generate/propagate `X-Correlation-ID` |
-| `RetryGatewayFilterFactory` | SCG built-in | Retry on 5xx with exponential backoff |
-| `CircuitBreakerGatewayFilterFactory` | SCG built-in | Open circuit on failure threshold |
-| `FallbackController` | Custom `@Controller` | Return structured 503 on circuit open |
-| `Header manipulation filters` | SCG built-in | Add/remove/rewrite request and response headers |
-| `CorsGlobalFilter` | SCG built-in | Validate origins, handle preflight |
-| `Actuator endpoints` | Spring Boot | Health, metrics, info |
-| OTEL Java agent | External | Auto-instrument HTTP client, Netty |
+| Decision | Rationale |
+|----------|-----------|
+| No Spring Security | Auth is handled entirely by `AuthenticationGlobalFilter` + `AuthenticationProvider`. Avoids OAuth2/JWKS complexity for the current architecture. |
+| Strategy pattern for auth | `MockAuthenticationProvider` vs `RemoteAuthenticationProvider` selected via `gateway.auth.mode` property. Only one active at a time. |
+| Reactive end-to-end | WebFlux + Netty for zero blocking. No thread pool for request handling. |
+| Configuration over code | SCG built-in filters for retry, circuit breaker, timeout, header manipulation. Custom code only where SCG has no built-in equivalent. |
 
 ---
 
-## 7. Request Lifecycle
+## 3. Request Lifecycle
 
 ```
 Client                  Gateway                           Upstream
@@ -246,19 +111,10 @@ Client                  Gateway                           Upstream
   │                   └───┬──────────┘                       │
   │                       │                                  │
   │                   ┌───▼──────────┐                       │
-  │                   │ 4. Authentication                   │
+  │                   │ 4. Auth      │                       │
   │                   │ GlobalFilter  │                       │
-  │                   │               │                       │
-  │                   │  ┌─────────┐  │                       │
-  │                   │  │ Auth    │  │                       │
-  │                   │  │ Provider│  │                       │
-  │                   │  │─ Mock:  │  │                       │
-  │                   │  │  always │  │                       │
-  │                   │  │  pass   │  │                       │
-  │                   │  │─ Remote:│  │                       │
-  │                   │  │  throws │  │                       │
-  │                   │  │  Unsup. │  │                       │
-  │                   │  └─────────┘  │                       │
+  │                   │ ─ Authenticate│                      │
+  │                   │ ─ If fail:401 │                      │
   │                   └───┬──────────┘                       │
   │                       │                                  │
   │                   ┌───▼──────────┐                       │
@@ -294,510 +150,135 @@ Client                  Gateway                           Upstream
   │◄──── HTTP Response ────                                  │
 ```
 
-### Phase Details
-
 | Phase | Mechanism | Error Response |
 |-------|-----------|----------------|
-| 1 | Netty HTTP parser | 400 (malformed request) |
+| 1 | Netty HTTP parser | 400 (malformed) |
 | 2 | `CorsGlobalFilter` | 403 (origin denied) |
 | 3 | `CorrelationIdGlobalFilter` | — |
 | 4 | `AuthenticationGlobalFilter` → `AuthenticationProvider` | 401 (unauthenticated), 500 (provider error) |
 | 5 | SCG `RouteLocator` | 404 (no matching route) |
-| 6 | SCG `RetryGatewayFilterFactory` | Retries transparently; 502 if all fail |
-| 7 | SCG `CircuitBreakerGatewayFilterFactory` | 503 + fallback response |
+| 6 | SCG `RetryGatewayFilterFactory` | 502 if all retries fail |
+| 7 | SCG `CircuitBreakerGatewayFilterFactory` | 503 + fallback |
 | 8 | Netty `HttpClient` with `response-timeout` | 504 (upstream timeout) |
 | 9 | SCG post-filters + `GlobalErrorHandler` | — |
 
 ---
 
-## 8. Filter Pipeline
+## 4. Filter Pipeline
 
 ### Filter Order
 
 ```
 Order   Filter                          Source        Type
 ────────────────────────────────────────────────────────────
--200    CorsGlobalFilter                SCG built-in  Global (all routes)
--100    CorrelationIdGlobalFilter      Custom        Global (all routes)
- -75    AuthenticationGlobalFilter      Custom        Global (all routes)
+-200    CorsGlobalFilter                SCG built-in  Global
+-100    CorrelationIdGlobalFilter       Custom        Global
+ -75    AuthenticationGlobalFilter       Custom        Global
   +0    Route predicates + per-route    SCG + YAML    Per-route
         filters (Retry, CB, headers)
- +100   GlobalErrorHandler              Custom        Error handler (post)
+ +100   GlobalErrorHandler               Custom        Error handler
 ```
 
-### V1 Filter Inventory
-
-#### Global (apply to every request)
+### Global Filters
 
 | Filter | Implementation | Notes |
 |--------|---------------|-------|
 | CORS | `spring.cloud.gateway.globalcors` | YAML config only |
-| Correlation ID | `CorrelationIdGlobalFilter` | Custom global filter |
+| Correlation ID | `CorrelationIdGlobalFilter` | Custom `GlobalFilter` |
 | Authentication | `AuthenticationGlobalFilter` | Always runs; delegates to `AuthenticationProvider` |
-| Metrics | Micrometer auto-config | No code needed |
-| Tracing | OTel Java agent auto-instrumentation | No code needed |
 | Error handling | `GlobalErrorHandler` | Custom `ErrorWebExceptionHandler` |
 
-#### Per-route (configurable in YAML)
+### Per-Route Filters (YAML config)
 
-| Filter | SCG Factory | Config Example |
-|--------|-------------|----------------|
-| Retry | `RetryGatewayFilterFactory` | `- Retry=retries:3,series:SERVER_ERROR` |
-| Circuit Breaker | `CircuitBreakerGatewayFilterFactory` | `- CircuitBreaker=name:myCB,fallbackUri:forward:/fallback` |
-| Add header | `AddRequestHeaderGatewayFilterFactory` | `- AddRequestHeader=X-Proxy:true` |
-| Remove header | `RemoveRequestHeaderGatewayFilterFactory` | `- RemoveRequestHeader=X-Internal` |
-| Rewrite path | `RewritePathGatewayFilterFactory` | `- RewritePath=/api/v1/users/(.*), /$\{segment1}` |
-| Strip prefix | `StripPrefixGatewayFilterFactory` | `- StripPrefix=1` |
-
----
-
-## 9. Module and Package Structure
-
-### Single Maven module
-
-```
-gateway
-├── GatewayApplication.java              # @SpringBootApplication
-├── config/
-│   └── AuthConfig.java                  # Authentication provider selection
-├── auth/
-│   ├── AuthenticationProvider.java      # Authentication delegation interface
-│   ├── AuthenticationResult.java        # Auth response model (subject, roles, permissions, claims)
-│   ├── MockAuthenticationProvider.java  # Always returns authenticated=true
-│   └── RemoteAuthenticationProvider.java  # Future Auth Platform client (stub)
-├── filter/
-│   ├── AuthenticationGlobalFilter.java  # Always runs auth before routing
-│   └── CorrelationIdGlobalFilter.java   # X-Correlation-ID global filter
-├── web/
-│   └── FallbackController.java          # Circuit breaker fallback endpoint
-└── common/
-    ├── exception/
-    │   └── GlobalErrorHandler.java      # Structured error responses
-    └── util/
-        └── HeaderConstants.java         # Header name constants
-```
-
-**Total custom classes: 11** (GatewayApplication, AuthConfig, AuthenticationProvider, AuthenticationResult, MockAuthenticationProvider, RemoteAuthenticationProvider, AuthenticationGlobalFilter, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
-
-### Package Dependency Rules
-
-```
-config → (none — Spring Security auto-config)
-filter → common
-web → (none)
-common → (none)
-```
-
-No circular dependencies — each package is independently testable.
+| Filter | SCG Factory |
+|--------|-------------|
+| Retry | `RetryGatewayFilterFactory` |
+| Circuit Breaker | `CircuitBreakerGatewayFilterFactory` |
+| Add header | `AddRequestHeaderGatewayFilterFactory` |
+| Remove header | `RemoveRequestHeaderGatewayFilterFactory` |
+| Rewrite path | `RewritePathGatewayFilterFactory` |
+| Strip prefix | `StripPrefixGatewayFilterFactory` |
 
 ---
 
-## 10. Routing Engine Design
+## 5. Authentication Delegation
 
-### Route Definition (entirely YAML)
-
-```yaml
-spring:
-  cloud:
-    gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "https://app.example.com"
-            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
-            allowedHeaders: "*"
-            maxAge: 1800
-
-      routes:
-        # Public health route (no auth)
-        - id: health
-          uri: http://health-service:8080
-          predicates:
-            - Path=/health/**
-          filters:
-            - StripPrefix=1
-
-        # Protected API — users
-        - id: users-api
-          uri: http://user-service:8080
-          predicates:
-            - Path=/api/v1/users/**
-            - Method=GET,POST,PUT,DELETE
-          filters:
-            - name: Retry
-              args:
-                retries: 3
-                series: SERVER_ERROR
-                methods: GET
-                statuses: 500,502,503
-            - name: CircuitBreaker
-              args:
-                name: usersCircuitBreaker
-                fallbackUri: forward:/fallback/users
-            - StripPrefix=1
-            - AddRequestHeader=X-Gateway-Proxy: true
-            - RemoveResponseHeader=X-Powered-By
-          metadata:
-            response-timeout: 5000
-
-        # Protected API — orders
-        - id: orders-api
-          uri: http://order-service:8080
-          predicates:
-            - Path=/api/v1/orders/**
-          filters:
-            - name: Retry
-              args:
-                retries: 2
-                series: SERVER_ERROR
-            - name: CircuitBreaker
-              args:
-                name: ordersCircuitBreaker
-                fallbackUri: forward:/fallback/orders
-            - StripPrefix=1
-          metadata:
-            response-timeout: 10000
-```
-
-### Route Resolution
+Every request goes through `AuthenticationGlobalFilter` (order -75) before route matching. The filter delegates to a configurable `AuthenticationProvider`:
 
 ```
-1. Request enters → Netty reads HTTP headers
-2. CORS validation (globalcors)
-3. Correlation ID filter adds X-Correlation-ID
-4. SCG RouteLocator evaluates each route's predicates in order
-5. First matching route: combine global + route filters
-6. No match: 404
+Request → AuthenticationGlobalFilter → AuthenticationProvider → Result
+                                      ┌─────────────────────┐
+                                      │ Mock (mode=mock)    │
+                                      │  → authenticated    │
+                                      ├─────────────────────┤
+                                      │ Remote (mode=remote)│
+                                      │  → throws           │
+                                      │    UnsupportedOp    │
+                                      └─────────────────────┘
+                                            │
+                                            ▼
+                                      AuthenticationResult
+                                      ├ authenticated=false → 401
+                                      └ authenticated=true → continue
 ```
 
-**No custom route resolution code.** SCG's built-in `RouteLocator` with YAML definitions handles everything.
+### Mode Selection
 
-### Timeout Configuration
-
-```yaml
-# Per-route timeout (in route metadata):
-metadata:
-  response-timeout: 5000
-
-# Global default timeout:
-spring:
-  cloud:
-    gateway:
-      httpclient:
-        response-timeout: 5s
-```
-
----
-
-## 11. Security Design
-
-### Authentication Pipeline
-
-Every request goes through `AuthenticationGlobalFilter` (order -75) before any route matching. The filter delegates to a configurable `AuthenticationProvider`:
-
-```
-Request
-  │
-  ▼
-AuthenticationGlobalFilter
-  │
-  ▼
-  ┌──────────────────────────────────┐
-  │  AuthenticationProvider          │
-  │  ┌────────────┐ ┌─────────────┐ │
-  │  │ Mock       │ │ Remote      │ │
-  │  │ (mode=mock)│ │ (mode=remote)│ │
-  │  │ always     │ │ throws      │ │
-  │  │ auth=true  │ │ Unsupported │ │
-  │  └────────────┘ └─────────────┘ │
-  └──────────────────────────────────┘
-  │
-  ▼
-AuthenticationResult
-  │ authenticated=false → 401 Unauthorized
-  │ authenticated=true  → continue to route matching
-```
-
-**Mode selection** via `application.yml`:
 ```yaml
 gateway:
   auth:
     mode: mock    # or "remote"
 ```
 
-### AuthenticationProvider interface:
-- `Mono<AuthenticationResult> authenticate(ServerWebExchange exchange)`
-- Receives the full `ServerWebExchange` for request inspection
-- Returns `AuthenticationResult` with authenticated flag, subject, roles, permissions, claims
+### AuthenticationProvider interface
+
+```java
+Mono<AuthenticationResult> authenticate(ServerWebExchange exchange);
+```
+
+Returns `AuthenticationResult` with:
+- `authenticated` — boolean
+- `subject` — principal identifier
+- `roles` — list of role strings (future use)
+- `permissions` — list of permission strings (future use)
+- `claims` — map of arbitrary claims (future use)
 
 ### MockAuthenticationProvider
-- Returns `authenticated = true` with subject `"mock-user"`
-- No HTTP calls, no JWT, no crypto — zero I/O
-- Suitable for local development and CI
 
-### RemoteAuthenticationProvider (stub):
+- Always returns `authenticated = true` with subject `"mock-user"`
+- No HTTP calls, no JWT, no crypto — zero I/O
+- Used for local development and CI
+
+### RemoteAuthenticationProvider
+
 - Currently throws `UnsupportedOperationException("Auth Platform integration is not implemented yet.")`
 - Will later make an HTTP call to the Auth Platform's `/auth/validate` endpoint
-- Configurable timeout, retry, circuit breaker (future)
+- **Note:** Gateway code touches nothing in the `auth-platform` project; it only prepares for future integration
 
-### AuthenticationResult
+---
 
-```java
-public record AuthenticationResult(
-    boolean authenticated,
-    String subject,
-    List<String> roles,
-    List<String> permissions,
-    Map<String, Object> claims
-)
+## 6. Routing
+
+Routes are defined entirely in YAML using SCG's declarative `RouteLocator`. No custom routing code.
+
+### Route Resolution
+
+```
+1. Netty reads HTTP headers
+2. CORS validation (globalcors)
+3. Correlation ID filter adds X-Correlation-ID
+4. AuthenticationGlobalFilter runs AuthenticationProvider
+5. SCG RouteLocator evaluates each route's predicates in order
+6. First matching route: combine global + route filters
+7. No match → 404
 ```
 
-Future-proof design — when RemoteAuthenticationProvider is implemented, it can populate roles, permissions, and claims without changing the contract.
-
-### CORS
-
-Configured at the SCG level. Preflight OPTIONS requests go through the authentication filter (mock mode always passes):
+### Per-Route Configuration
 
 ```yaml
 spring:
   cloud:
     gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: "${GATEWAY_CORS_ORIGINS:https://app.example.com}"
-            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
-            allowedHeaders: Authorization,Content-Type,X-Correlation-ID
-            allowCredentials: true
-            maxAge: 1800
-```
-
-**Note:** Spring Security has been removed from the project. Authentication is handled entirely by the `AuthenticationGlobalFilter` + `AuthenticationProvider` pipeline, avoiding the complexity of OAuth2, JWKS, and Spring Security filter chains.
-
----
-
-## 12–13. Resilience Design
-
-### Circuit Breaker
-
-Uses SCG's `CircuitBreakerGatewayFilterFactory` backed by Resilience4j.
-
-```yaml
-# In route filters:
-- name: CircuitBreaker
-  args:
-    name: usersCircuitBreaker
-    fallbackUri: forward:/fallback/users
-
-# In application.yml:
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
-    instances:
-      usersCircuitBreaker:
-        baseConfig: default
-```
-
-### Retry
-
-Uses SCG's `RetryGatewayFilterFactory`:
-
-```yaml
-- name: Retry
-  args:
-    retries: 3
-    series: SERVER_ERROR
-    methods: GET
-    statuses: 500,502,503
-```
-
-Rules: retry GET only (idempotent), max 3 attempts, exponential backoff (auto).
-
-### Timeout
-
-Per-route via route metadata:
-
-```yaml
-metadata:
-  response-timeout: 5000  # milliseconds
-```
-
-Global default in `application.yml`:
-
-```yaml
-spring:
-  cloud:
-    gateway:
-      httpclient:
-        response-timeout: 5s
-```
-
-### Fallback Controller
-
-```java
-@RestController
-public class FallbackController {
-
-    @GetMapping("/fallback/{routeId}")
-    public Mono<Map<String, Object>> fallback(@PathVariable String routeId,
-                                               ServerWebExchange exchange) {
-        return Mono.just(Map.of(
-            "status", 503,
-            "error", "Service temporarily unavailable",
-            "route", routeId,
-            "correlationId", exchange.getAttribute("correlationId")
-        ));
-    }
-}
-```
-
-### Resilience Strategy Summary
-
-| Pattern | Trigger | Response | Code |
-|---------|---------|----------|------|
-| Circuit Breaker | 5 failures in 10-call window | 503 + fallback | YAML only |
-| Retry | 5xx response | Transparent retry (max 3) | YAML only |
-| Timeout | No response within `response-timeout` | 504 | YAML only |
-
----
-
-## 14. Observability Design
-
-### 14.1 Structured Logging
-
-**log4j2.xml** (JsonTemplateLayout):
-
-```xml
-<Configuration status="WARN" shutdownHook="disable">
-    <Properties>
-        <Property name="defaultLogLevel">${env:DEFAULT_LOG_LEVEL:-INFO}</Property>
-    </Properties>
-    <Appenders>
-        <Console name="Console" target="SYSTEM_OUT">
-            <JsonTemplateLayout eventTemplateUri="classpath:log-layout.json"/>
-        </Console>
-    </Appenders>
-    <Loggers>
-        <Root level="${defaultLogLevel}">
-            <AppenderRef ref="Console"/>
-        </Root>
-    </Loggers>
-</Configuration>
-```
-
-**log-layout.json** defines JSON fields: `timestamp`, `level`, `logger`, `message`, `thread`, `method`, `line`, `correlationId`, `traceId`, `spanId`, `exception`.
-
-**MDC context** populated by `CorrelationIdGlobalFilter`:
-
-```java
-.contextWrite(ctx -> {
-    MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
-    return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
-})
-```
-
-`Hooks.enableAutomaticContextPropagation()` in `GatewayApplication.java` bridges Reactor Context into MDC across threads.
-
-The `CorrelationIdGlobalFilter` also reads the current OpenTelemetry span via `Span.current()` and populates `traceId`/`spanId` in MDC when a valid span context exists (e.g., when the OTel Java agent or SDK is active).
-
-### 14.2 Metrics
-
-Micrometer auto-configures with `micrometer-registry-prometheus`:
-
-| Metric | Source | Type |
-|--------|--------|------|
-| `http.server.requests` | Spring WebFlux auto | Timer (method, status, uri) |
-| `resilience4j.circuitbreaker.calls` | Resilience4j auto | Counter |
-| `resilience4j.circuitbreaker.state` | Resilience4j auto | Gauge |
-| `jvm.*` | JVM Micrometer | Various |
-
-No custom metrics code needed.
-
-### 14.3 Distributed Tracing
-
-**OpenTelemetry Java agent** is attached at runtime via JVM args:
-
-```bash
--javaagent:opentelemetry-javaagent.jar
--Dotel.service.name=api-gateway
--Dotel.exporter.otlp.endpoint=http://otel-collector:4318
--Dotel.traces.sampler=parentbased_always_on
--Dotel.propagators=tracecontext,baggage
-```
-
-This auto-instruments:
-- Netty HTTP server (incoming requests)
-- Netty HTTP client (outgoing proxy calls)
-- Adds trace context headers (`traceparent`) to upstream requests
-
-**Zero custom tracing code.** No manual span creation in V1.
-
-### 14.4 Health Endpoints
-
-| Endpoint | Purpose | Probes |
-|----------|---------|--------|
-| `/actuator/health` | Health + readiness | Liveness: `/actuator/health/liveness` |
-| `/actuator/health/liveness` | Is the process alive? | Always UP |
-| `/actuator/health/readiness` | Can it serve traffic? | Always UP (no external deps) |
-| `/actuator/info` | Build info, git commit | Build metadata |
-| `/actuator/prometheus` | Metrics scrape target | Prometheus |
-
-No custom health indicators — gateway has no external dependencies to check. `application.yml` configures separate probe paths.
-
-Error responses are handled by `GlobalErrorHandler` (`ErrorWebExceptionHandler`), which intercepts exceptions at order -2 and returns structured JSON with status, error, path, correlationId, and timestamp.
-
----
-
-## 15. Configuration Model
-
-### Configuration Sources (by precedence)
-
-```
-1. Environment variables / K8s secrets    (highest)
-2. application-{profile}.yml               (profile-specific)
-3. application.yml                         (base)
-```
-
-### Application YAML Structure
-
-```yaml
-server:
-  port: 8000
-  shutdown: graceful
-  netty:
-    connection-timeout: 5s
-
-spring:
-  application:
-    name: api-gateway
-  lifecycle:
-    timeout-per-shutdown-phase: 30s
-  codec:
-    max-in-memory-size: 256KB
-
-  cloud:
-    gateway:
-      globalcors:
-        cors-configurations:
-          '[/**]':
-            allowedOrigins: ${GATEWAY_CORS_ORIGINS:https://app.example.com}
-            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
-            allowedHeaders: Authorization,Content-Type,X-Correlation-ID
-            allowCredentials: true
-            maxAge: 1800
-      httpclient:
-        response-timeout: 5s
-        connect-timeout: 3s
-        pool:
-          type: ELASTIC
-          max-connections: 500
-          max-idle-time: 60s
       routes:
         - id: example
           uri: http://example-service:8080
@@ -816,14 +297,24 @@ spring:
                 fallbackUri: forward:/fallback/example
           metadata:
             response-timeout: 5000
+```
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER_URI:https://auth.example.com}
-          jwk-set-uri: ${JWKS_URI:https://auth.example.com/.well-known/jwks.json}
+### Timeout
 
+| Scope | Configuration |
+|-------|--------------|
+| Per-route | Route metadata `response-timeout` (ms) |
+| Global default | `spring.cloud.gateway.httpclient.response-timeout` |
+
+---
+
+## 7. Resilience
+
+### Circuit Breaker
+
+SCG's `CircuitBreakerGatewayFilterFactory` backed by Resilience4j. Opens on configurable failure threshold, routes to `FallbackController` when open.
+
+```yaml
 resilience4j:
   circuitbreaker:
     configs:
@@ -833,127 +324,131 @@ resilience4j:
         failureRateThreshold: 50
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info,prometheus
-      base-path: /actuator
-  endpoint:
-    health:
-      probes:
-        enabled: true
-      show-details: never
-  metrics:
-    tags:
-      application: ${spring.application.name}
-
-logging:
-  level:
-    root: INFO
-    gateway: DEBUG
 ```
 
-No custom `@ConfigurationProperties` classes — everything uses Spring Boot's native configuration keys.
+### Retry
+
+SCG's `RetryGatewayFilterFactory`. Retries GET requests only (idempotent) on server errors (5xx).
+
+### Timeout
+
+- Per-route: `metadata.response-timeout` (ms)
+- Global: `spring.cloud.gateway.httpclient.response-timeout`
+
+### Fallback Controller
+
+When a circuit breaker opens, requests are forwarded to `FallbackController` which returns a structured 503 response with correlation ID, route name, and timestamp.
+
+### Summary
+
+| Pattern | Trigger | Response |
+|---------|---------|----------|
+| Circuit Breaker | Failure threshold exceeded | 503 + fallback |
+| Retry | 5xx response | Transparent (max 3, GET only) |
+| Timeout | No response within window | 504 |
 
 ---
 
-## 16. Deployment Architecture
+## 8. Observability
 
-### Docker Image
+### Structured Logging
 
-Multi-stage build with `Dockerfile`:
+Log4j2 with `JsonTemplateLayout` outputs JSON to stdout. Fields: `timestamp`, `level`, `logger`, `message`, `thread`, `method`, `line`, `correlationId`, `traceId`, `spanId`, `exception`.
 
-```dockerfile
-# Stage 1: Build the application
-FROM eclipse-temurin:26-jdk AS builder
-WORKDIR /build
-COPY mvnw pom.xml ./
-COPY .mvn .mvn
-RUN ./mvnw -B dependency:go-offline
-COPY src src
-RUN ./mvnw -B package -DskipTests
+MDC context is populated by `CorrelationIdGlobalFilter` and bridged across threads via `Hooks.enableAutomaticContextPropagation()`.
 
-# Stage 2: Runtime
-FROM eclipse-temurin:26-jre AS runtime
-RUN groupadd -r gateway && useradd -r -g gateway gateway
-USER gateway
-WORKDIR /app
-COPY --from=builder /build/target/*.jar app.jar
-EXPOSE 8000
-ENTRYPOINT ["java", "-jar", "app.jar"]
-```
+### Metrics
 
-Build:
-```bash
-docker build -t api-gateway .
-docker run -p 8000:8000 api-gateway
-```
+Micrometer auto-configures with `micrometer-registry-prometheus`. Exposed at `/actuator/prometheus`:
 
-Or with Docker Compose:
-```bash
-docker compose up --build
-```
+| Metric | Source | Type |
+|--------|--------|------|
+| `http.server.requests` | Spring WebFlux | Timer |
+| `resilience4j.circuitbreaker.*` | Resilience4j | Counter, Gauge |
+| `jvm.*` | JVM Micrometer | Various |
 
-### Graceful Shutdown
+No custom metrics code.
 
-- `server.shutdown=graceful` — Spring Boot drains in-flight requests
-- `spring.lifecycle.timeout-per-shutdown-phase=30s` — max drain window
+### Distributed Tracing
+
+OpenTelemetry Java agent auto-instruments Netty HTTP server and client at runtime. Trace context propagated to upstream services via `traceparent` headers. No custom tracing code.
+
+### Health Endpoints
+
+| Endpoint | Purpose |
+|----------|---------|
+| `/actuator/health` | Overall health |
+| `/actuator/health/liveness` | Process alive? |
+| `/actuator/health/readiness` | Ready for traffic? |
+| `/actuator/info` | Build metadata |
+| `/actuator/prometheus` | Metrics scrape |
+
+No custom health indicators — gateway has no external dependencies to check.
 
 ---
 
-## 17. Folder Structure
+## 9. Configuration Model
+
+### Precedence
 
 ```
-api-gateway/
-├── DESIGN.md                          # This document
-├── REVIEW.md                          # Architecture review of v1 draft
-├── ROADMAP.md                         # Implementation milestones
-├── AGENTS.md                          # AI coding agent context
-├── README.md                          # Quick start
-├── docker-compose.yml                 # Docker Compose (build + run)
-├── Dockerfile                         # Multi-stage Docker build
-├── pom.xml                            # Maven build
-├── mvnw / mvnw.cmd
-├── src/
-│   ├── main/
-│   │   ├── java/gateway/
-│   │   │   ├── GatewayApplication.java
-│   │   │   ├── config/
-│   │   │   │   └── SecurityConfig.java
-│   │   │   ├── filter/
-│   │   │   │   └── CorrelationIdGlobalFilter.java
-│   │   │   ├── web/
-│   │   │   │   └── FallbackController.java
-│   │   │   └── common/
-│   │   │       ├── exception/
-│   │   │       │   └── GlobalErrorHandler.java
-│   │   │       └── util/
-│   │   │           └── HeaderConstants.java
-│   │   └── resources/
-│   │       ├── application.yml
-│   │       ├── log4j2.xml
-│   │       └── log-layout.json
-│   └── test/
-│       ├── java/gateway/
-│       │   ├── filter/
-│       │   │   └── CorrelationIdGlobalFilterTest.java
-│       │   ├── web/
-│       │   │   └── FallbackControllerTest.java
-│       │   ├── common/
-│       │   │   └── exception/
-│       │   │       └── GlobalErrorHandlerTest.java
-│       │   └── integration/
-│       │       ├── GatewayIntegrationTest.java
-│       │       └── GatewayResilienceIntegrationTest.java
-│       └── resources/
-│           └── application.yml
+1. Environment variables / K8s secrets    (highest)
+2. application.yml                         (base)
 ```
+
+No custom `@ConfigurationProperties` — everything uses Spring Boot native configuration keys.
+
+### Key Properties
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `server.port` | 8000 | HTTP listen port |
+| `gateway.auth.mode` | `mock` | Auth mode (`mock` or `remote`) |
+| `spring.cloud.gateway.httpclient.response-timeout` | 5s | Global upstream timeout |
+| `spring.codec.max-in-memory-size` | 256KB | Request body size limit |
 
 ---
 
-## 18. Coding Standards
+## 10. Package Structure
+
+```
+gateway
+├── GatewayApplication.java              # @SpringBootApplication entry point
+├── config/
+│   └── AuthConfig.java                  # Conditionally selects AuthenticationProvider bean
+├── auth/
+│   ├── AuthenticationProvider.java      # Strategy interface: Mono<AuthenticationResult> authenticate(ServerWebExchange)
+│   ├── AuthenticationResult.java        # Record: authenticated, subject, roles, permissions, claims
+│   ├── MockAuthenticationProvider.java  # Returns authenticated=true, zero I/O
+│   └── RemoteAuthenticationProvider.java  # Throws UnsupportedOperationException (future integration)
+├── filter/
+│   ├── AuthenticationGlobalFilter.java  # GlobalFilter (order -75), runs auth before route matching
+│   └── CorrelationIdGlobalFilter.java   # GlobalFilter (order -100), generates/propagates X-Correlation-ID
+├── web/
+│   └── FallbackController.java          # Returns structured 503 on circuit breaker open
+└── common/
+    ├── exception/
+    │   └── GlobalErrorHandler.java      # ErrorWebExceptionHandler returning JSON error bodies
+    └── util/
+        └── HeaderConstants.java         # X-Correlation-ID constant
+```
+
+**Total custom classes: 11**
+
+### Dependency Rules
+
+```
+config  → auth
+filter  → auth, common
+web     → common
+common  → (none)
+```
+
+No circular dependencies.
+
+---
+
+## 11. Coding Standards
 
 ### Principles
 
@@ -968,65 +463,15 @@ api-gateway/
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Filter factories | `{Purpose}FilterFactory` | `CorrelationIdGlobalFilter` |
+| Global filters | `{Purpose}GlobalFilter` | `AuthenticationGlobalFilter` |
 | Controllers | `{Resource}Controller` | `FallbackController` |
-| Config classes | `{Domain}Config` | `SecurityConfig` |
-| Error handler | `Global{Type}Handler` | `GlobalErrorHandler` |
-| Test classes | `{ClassUnderTest}Test` | `CorrelationIdGlobalFilterTest` |
-
-### GlobalFilter Template
-
-```java
-@Component
-public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
-
-    public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
-
-    @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
-        String correlationId = resolveCorrelationId(exchange);
-        exchange.getAttributes().put(CORRELATION_ID_ATTRIBUTE, correlationId);
-
-        var mutatedExchange = exchange.mutate()
-                .request(exchange.getRequest().mutate()
-                        .header(HeaderConstants.X_CORRELATION_ID, correlationId).build())
-                .build();
-
-        return chain.filter(mutatedExchange)
-                .then(Mono.defer(() -> {
-                    mutatedExchange.getResponse().getHeaders()
-                            .add(HeaderConstants.X_CORRELATION_ID, correlationId);
-                    MDC.clear();
-                    return Mono.empty();
-                }))
-                .contextWrite(ctx -> {
-                    MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
-                    return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
-                })
-                .then();
-    }
-}
-```
-
-### Error Handling
-
-Error responses use `GlobalErrorHandler` (`ErrorWebExceptionHandler` at order -2), which returns structured JSON:
-
-```json
-{
-  "timestamp": "2026-07-15T12:00:00.000Z",
-  "status": 404,
-  "error": "Not Found",
-  "path": "/api/v1/nonexistent",
-  "correlationId": "a1b2c3d4-..."
-}
-```
-
-Fields: `timestamp`, `status`, `error`, `path`, `correlationId`. The handler maps `ResponseStatusException` status codes and falls back to 500 for unhandled exceptions.
+| Config classes | `{Domain}Config` | `AuthConfig` |
+| Error handlers | `Global{Type}Handler` | `GlobalErrorHandler` |
+| Test classes | `{ClassUnderTest}Test` | `AuthenticationGlobalFilterTest` |
 
 ### Reactor Best Practices
 
-- `Hooks.enableAutomaticContextPropagation()` in main class for MDC
+- `Hooks.enableAutomaticContextPropagation()` in main class for MDC bridging
 - `.flatMap()` for async, `.map()` for sync — never nest
 - `.onErrorResume()` or `.onErrorMap()` on every risky chain
 - Use Reactor `Context` for request-scoped data, not `ThreadLocal`
@@ -1034,171 +479,23 @@ Fields: `timestamp`, `status`, `error`, `path`, `correlationId`. The handler map
 
 ---
 
-## 19. Testing Strategy
+## 12. Deployment
 
-### Test Pyramid
+### Docker
 
-```
-          ╱╲
-         ╱  ╲
-        ╱ E2E╲           ← 10%  (full integration with WireMock)
-       ╱──────╲
-      ╱Integration╲      ← 30%  (filter + controller in Spring context)
-     ╱────────────╲
-    ╱   Unit Tests  ╲    ← 60%  (individual classes in isolation)
-   ╱────────────────╲
-```
+Multi-stage build produces a minimal runtime image with non-root user:
 
-### 19.1 Unit Tests
+| Stage | Base Image | Purpose |
+|-------|-----------|---------|
+| Builder | `eclipse-temurin:26-jdk` | Compile and package |
+| Runtime | `eclipse-temurin:26-jre` | Run the JAR |
 
-| Class | Framework | What to Test |
-|-------|-----------|-------------|
-| `CorrelationIdGlobalFilter` | JUnit 5 + Mockito + StepVerifier | ID generation, propagation, missing ID handling |
-| `FallbackController` | JUnit 5 + Mockito | Response shape, correlation ID in response |
-| `GlobalErrorHandler` | JUnit 5 + Mockito | Status mapping, JSON body format |
-
-### 19.2 Integration Tests
-
-```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)
-@AutoConfigureWebTestClient
-class GatewayIntegrationTest {
-
-    @Autowired
-    private WebTestClient webClient;
-
-    @Test
-    void shouldReturn401WhenNoJwtProvided() {
-        webClient.get().uri("/api/v1/users")
-            .exchange()
-            .expectStatus().isUnauthorized();
-    }
-
-    @Test
-    void shouldReturn200WhenValidJwtProvided() {
-        webClient.get().uri("/api/v1/users")
-            .header("Authorization", "Bearer " + validJwt())
-            .exchange()
-            .expectStatus().isOk();
-    }
-
-    @Test
-    void shouldReturnCorrelationIdInResponse() {
-        webClient.get().uri("/api/v1/users")
-            .header("Authorization", "Bearer " + validJwt())
-            .exchange()
-            .expectHeader().exists("X-Correlation-ID");
-    }
-
-    @Test
-    void shouldReturn503WhenCircuitBreakerOpen() {
-        // Trigger circuit break via repeated 5xx from WireMock
-        ...
-        webClient.get().uri("/api/v1/orders")
-            .header("Authorization", "Bearer " + validJwt())
-            .exchange()
-            .expectStatus().is5xxServerError();
-    }
-}
+```bash
+docker build -t api-gateway .
+docker run -p 8000:8000 api-gateway
 ```
 
-### 19.3 WireMock Upstreams
+### Graceful Shutdown
 
-```java
-@SpringBootTest(webEnvironment = RANDOM_PORT)
-@WireMockTest(httpPort = 8081)
-class RoutingIntegrationTest {
-
-    @Test
-    void shouldRouteToUpstream() {
-        stubFor(get("/api/v1/users")
-            .willReturn(aResponse()
-                .withStatus(200)
-                .withBody("{"users":[]}")));
-
-        webClient.get().uri("/api/v1/users")
-            .header("Authorization", "Bearer " + validJwt())
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody().jsonPath("users").isArray();
-    }
-}
-```
-
-### 19.4 Test Configuration
-
-```yaml
-# src/test/resources/application-test.yml
-spring:
-  cloud:
-    gateway:
-      routes:
-        - id: test-route
-          uri: http://localhost:${wiremock.server.port:8081}
-          predicates:
-            - Path=/api/v1/**
-          filters:
-            - StripPrefix=1
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: classpath:test-jwks.json
-```
-
-### What We DON'T Need in V1
-
-| Tool | Reason |
-|------|--------|
-| Testcontainers | No Redis, PostgreSQL, or external services |
-| REST Assured | WebTestClient from Spring is superior for reactive |
-| Gatling / k6 | Performance testing is V2 |
-| Spring Cloud Contract | Overkill until multiple teams own upstreams |
-
----
-
-## 20. Development Roadmap
-
-| Phase | Scope | Duration | Est. Classes |
-|-------|-------|----------|-------------|
-| **M1** | Scaffold + build + basic routing | ~2-3 days | 2 |
-| **M2** | Correlation ID + structured logging | ~1-2 days | 2 |
-| **M3** | Auth delegation (AuthenticationProvider interface) | ~2-3 days | 3 |
-| **M4** | Resilience (CB + retry + timeout + fallback) | ~2-3 days | 1 |
-| **M5** | Error handling + metrics + tracing + health endpoints | ~1-2 days | 1 |
-| **M6** | Docker deployment (Dockerfile, docker-compose.yml) | ~1 day | 0 |
-| **M7** | Comprehensive testing + production hardening | ~2-3 days | 0 |
-
-**Total:** ~14-19 days. ~6 custom classes. The rest is YAML configuration.
-
----
-
-## Libraries & Dependencies
-
-### Runtime
-
-| Dependency | Version | Purpose |
-|-----------|---------|---------|
-| `spring-boot-starter-webflux` | 4.x | Reactive web server (Netty) |
-| `spring-cloud-starter-gateway` | 5.x | Routing, predicates, filter chain |
-| `spring-boot-starter-actuator` | 4.x | Health, metrics, info endpoints |
-| `spring-cloud-starter-circuitbreaker-reactor-resilience4j` | 4.x | Circuit breaker |
-| `micrometer-registry-prometheus` | 1.x | Prometheus metric export |
-| `spring-boot-starter-log4j2` | managed | Log4j2 SLF4J binding |
-| `log4j-layout-template-json` | managed | JSON template layout |
-| `opentelemetry-javaagent` (runtime) | 2.x | Auto-instrumentation for tracing |
-
-### Test
-
-| Dependency | Purpose |
-|-----------|---------|
-| `spring-boot-starter-test` | JUnit 5, Mockito |
-| `io.projectreactor:reactor-test` | StepVerifier |
-| `org.wiremock:wiremock-standalone` | HTTP stub for upstreams |
-| `org.springframework.security:spring-security-test` | JWT test helpers |
-|
-### Custom
-|
-| Package | Classes |
-|---------|---------|
-| `gateway.auth` | AuthenticationProvider, AuthenticationResult, RemoteAuthenticationProvider |
+- `server.shutdown=graceful` — drain in-flight requests
+- `spring.lifecycle.timeout-per-shutdown-phase=30s` — max drain window
