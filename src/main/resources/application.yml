@@ -52,6 +52,9 @@ spring:
           max-idle-time: 60s
 
 management:
+  health:
+    redis:
+      enabled: false
   endpoints:
     web:
       exposure:
