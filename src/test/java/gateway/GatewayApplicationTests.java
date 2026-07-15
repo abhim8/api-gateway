@@ -6,11 +6,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.ApplicationContext;
 import org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 @SpringBootTest
-@ActiveProfiles("test")
 class GatewayApplicationTests {
 
     @Autowired
@@ -27,8 +25,7 @@ class GatewayApplicationTests {
     }
 
     @Test
-    void contextLoads() {
-    }
+    void contextLoads() {}
 
     @Test
     void shouldReturn404ForUnknownRoute() {
@@ -37,6 +34,7 @@ class GatewayApplicationTests {
                 .get()
                 .uri("/nonexistent")
                 .exchange()
-                .expectStatus().isNotFound();
+                .expectStatus()
+                .isNotFound();
     }
 }

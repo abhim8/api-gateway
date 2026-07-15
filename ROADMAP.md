@@ -79,21 +79,22 @@ class GatewayApplicationTests {
 
 | File | Purpose |
 |------|---------|
-| `src/main/java/gateway/filter/CorrelationIdFilterFactory.java` | Global `GatewayFilter` that generates/forwards correlation ID |
+| `src/main/java/gateway/filter/CorrelationIdGlobalFilter.java` | Global `GlobalFilter` that generates/forwards correlation ID |
 | `src/main/java/gateway/common/util/HeaderConstants.java` | Shared header name constants |
-| `src/main/resources/logback-spring.xml` | JSON encoder with MDC |
-| `src/test/java/gateway/filter/CorrelationIdFilterFactoryTest.java` | Unit tests |
+| `src/main/resources/log4j2.xml` | Log4j2 JSON console logging |
+| `src/main/resources/log-layout.json` | JsonTemplateLayout field definitions |
+| `src/test/java/gateway/filter/CorrelationIdGlobalFilterTest.java` | Unit tests |
 
 ### Classes to Implement
 
 | Class | Responsibility |
 |-------|----------------|
-| `CorrelationIdFilterFactory` | Generate `X-Correlation-ID` if absent; add to request headers, response headers, and Reactor Context |
+| `CorrelationIdGlobalFilter` | Generate `X-Correlation-ID` if absent; add to request headers, response headers, Reactor Context, and MDC |
 | `HeaderConstants` | `String` constants for `X-Correlation-ID`, `X-Request-Id`, etc. |
 
 ### Tests to Write
 
-**CorrelationIdFilterFactoryTest.java** (unit):
+**CorrelationIdGlobalFilterTest.java** (unit):
 
 | Test | Scenario |
 |------|----------|
@@ -107,7 +108,7 @@ class GatewayApplicationTests {
 - [x] Every response includes `X-Correlation-ID` header
 - [x] If client sends `X-Correlation-ID`, it is preserved
 - [x] Upstream proxy request includes `X-Correlation-ID` header
-- [x] Logs are valid JSON (Logstash format)
+- [x] Logs are valid JSON (Log4j2 JsonTemplateLayout format)
 - [x] Logs include `correlation_id` field matching the header
 - [x] Logs include `trace_id` and `span_id` when OTel agent is attached
 - [x] Tests pass
@@ -453,11 +454,11 @@ These are explicitly deferred to keep V1 lean:
 ## Delivery Checklist
 
 ```
-M1: Foundation           ☐ pom.xml           ☐ application.yml   ☐ context test
-M2: Correlation+Logging  ☐ CorrelationFilter  ☐ logback.xml      ☐ unit test
-M3: Security             ☐ SecurityConfig    ☐ JWKS fixture      ☐ auth integration
-M4: Resilience           ☐ FallbackController ☐ CB config        ☐ resil integration
-M5: Observability        ☐ GlobalErrorHandler ☐ OTEL agent       ☐ error unit test
+M1: Foundation           ✓ pom.xml           ✓ application.yml   ✓ context test
+M2: Correlation+Logging  ✓ CorrelationFilter  ✓ log4j2.xml+log-layout.json ✓ unit test
+M3: Security             ✓ SecurityConfig    ✓ JWKS fixture      ✓ auth integration
+M4: Resilience           ✓ FallbackController ✓ CB config        ✓ resil integration
+M5: Error Handling       ☐ GlobalErrorHandler ☐ JSON error body  ☐ error unit test
 M6: Docker+K8s           ☐ k8s/*.yaml        ☐ Jib config        ☐ build test
 M7: Full Test Suite      ☐ integration test  ☐ WireMock stubs    ☐ >85% coverage
 ```

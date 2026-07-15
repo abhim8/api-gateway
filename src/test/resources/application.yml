@@ -1,0 +1,95 @@
+server:
+  port: 0
+
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwk-set-uri: http://localhost:1/.well-known/jwks.json
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: test-route
+              uri: http://localhost:${wiremock.server.port:8081}
+              predicates:
+                - Path=/api/v1/**
+              filters:
+                - StripPrefix=1
+              metadata:
+                response-timeout: 2000
+
+            - id: cb-test-route
+              uri: http://localhost:${wiremock.server.port:8081}
+              predicates:
+                - Path=/api/v4/**
+              filters:
+                - name: CircuitBreaker
+                  args:
+                    name: testCB
+                    fallbackUri: forward:/fallback/cb-test-route
+                    statusCodes:
+                      - "500"
+                      - "502"
+                      - "503"
+                      - "504"
+                - name: Retry
+                  args:
+                    retries: 2
+                    series:
+                      - SERVER_ERROR
+                    methods:
+                      - GET
+                    statuses:
+                      - INTERNAL_SERVER_ERROR
+                - StripPrefix=1
+              metadata:
+                response-timeout: 2000
+
+            - id: retry-test-route
+              uri: http://localhost:${wiremock.server.port:8081}
+              predicates:
+                - Path=/api/v2/**
+              filters:
+                - name: Retry
+                  args:
+                    retries: 2
+                    series:
+                      - SERVER_ERROR
+                    methods:
+                      - GET
+                    statuses:
+                      - INTERNAL_SERVER_ERROR
+                - StripPrefix=1
+              metadata:
+                response-timeout: 2000
+
+            - id: timeout-test-route
+              uri: http://localhost:${wiremock.server.port:8081}
+              predicates:
+                - Path=/api/v3/**
+              filters:
+                - StripPrefix=1
+              metadata:
+                response-timeout: 2000
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        slidingWindowSize: 4
+        minimumNumberOfCalls: 2
+        failureRateThreshold: 50
+        waitDurationInOpenState: 1s
+        permittedNumberOfCallsInHalfOpenState: 1
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+    instances:
+      testCB:
+        baseConfig: default
+
+logging:
+  level:
+    root: INFO
+    gateway: DEBUG

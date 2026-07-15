@@ -22,8 +22,8 @@
         <spring-cloud.version>2025.1.2</spring-cloud.version>
         <spring-cloud-gateway.version>5.0.2</spring-cloud-gateway.version>
         <spring-cloud-circuitbreaker.version>5.0.2</spring-cloud-circuitbreaker.version>
-        <logstash-encoder.version>8.0</logstash-encoder.version>
         <wiremock.version>3.9.2</wiremock.version>
+        <awaitility.version>4.2.2</awaitility.version>
         <jacoco.version>0.8.12</jacoco.version>
         <spotless.version>2.43.0</spotless.version>
         <jib.version>3.4.4</jib.version>
@@ -60,28 +60,68 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <!-- Log4j2 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-layout-template-json</artifactId>
         </dependency>
 
         <!-- Actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Security + JWT -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Circuit Breaker -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-circuitbreaker-reactor-resilience4j</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Metrics -->
@@ -90,18 +130,17 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
-        <!-- Structured Logging -->
-        <dependency>
-            <groupId>net.logstash.logback</groupId>
-            <artifactId>logstash-logback-encoder</artifactId>
-            <version>${logstash-encoder.version}</version>
-        </dependency>
-
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -117,6 +156,12 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.awaitility</groupId>
+            <artifactId>awaitility</artifactId>
+            <version>${awaitility.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -223,8 +268,8 @@
                     </to>
                     <container>
                         <jvmFlags>
-                            <jvmFlag>-Xms256m</jvmFlag>
-                            <jvmFlag>-Xmx256m</jvmFlag>
+                            <jvmFlag>-Xms512m</jvmFlag>
+                            <jvmFlag>-Xmx512m</jvmFlag>
                             <jvmFlag>-XX:+UseZGC</jvmFlag>
                             <jvmFlag>-XX:MaxMetaspaceSize=128m</jvmFlag>
                             <jvmFlag>-Djava.security.egd=file:/dev/./urandom</jvmFlag>
@@ -238,29 +283,5 @@
             </plugin>
         </plugins>
     </build>
-
-    <profiles>
-        <profile>
-            <id>dev</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-            </activation>
-            <properties>
-                <spring.profiles.active>dev</spring.profiles.active>
-            </properties>
-        </profile>
-        <profile>
-            <id>test</id>
-            <properties>
-                <spring.profiles.active>test</spring.profiles.active>
-            </properties>
-        </profile>
-        <profile>
-            <id>production</id>
-            <properties>
-                <spring.profiles.active>production</spring.profiles.active>
-            </properties>
-        </profile>
-    </profiles>
 
 </project>

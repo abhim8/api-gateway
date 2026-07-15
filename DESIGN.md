@@ -73,7 +73,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 | FR-05 | Enforce upstream request timeouts | Route metadata `response-timeout` |
 | FR-06 | Add, remove, and transform HTTP headers | SCG `AddRequestHeader`, `RemoveRequestHeader`, etc. |
 | FR-07 | Handle CORS preflight and origin validation | `spring.cloud.gateway.globalcors` |
-| FR-08 | Generate and propagate correlation IDs | Custom `CorrelationIdFilterFactory` |
+| FR-08 | Generate and propagate correlation IDs | Custom `CorrelationIdGlobalFilter` |
 | FR-09 | Emit structured JSON logs per request | Logstash encoder + MDC |
 | FR-10 | Expose health, readiness, and liveness endpoints | Spring Boot Actuator |
 | FR-11 | Expose Prometheus metrics | Micrometer + `micrometer-registry-prometheus` |
@@ -174,7 +174,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 │  │                                                  │    │
 │  │  Pre-filters:                                    │    │
 │  │    ├─ CorsGlobalFilter              (built-in)   │    │
-│  │    └─ CorrelationIdFilterFactory    (custom)     │    │
+│  │    └─ CorrelationIdGlobalFilter    (custom)     │    │
 │  │                                                  │    │
 │  │  Route filters: (per-route YAML)                 │    │
 │  │    ├─ RetryGatewayFilterFactory     (built-in)   │    │
@@ -201,7 +201,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 |-----------|------|----------------|
 | `SecurityWebFilterChain` | Spring Security | JWT validation, path authorization, CORS |
 | `RouteLocator` | SCG built-in | Route matching from YAML definitions |
-| `CorrelationIdFilterFactory` | Custom `GatewayFilter` | Generate/propagate `X-Correlation-ID` |
+| `CorrelationIdGlobalFilter` | Custom `GlobalFilter` | Generate/propagate `X-Correlation-ID` |
 | `RetryGatewayFilterFactory` | SCG built-in | Retry on 5xx with exponential backoff |
 | `CircuitBreakerGatewayFilterFactory` | SCG built-in | Open circuit on failure threshold |
 | `FallbackController` | Custom `@Controller` | Return structured 503 on circuit open |
@@ -282,7 +282,7 @@ Client                  Gateway                           Upstream
 |-------|-----------|----------------|
 | 1 | Netty HTTP parser | 400 (malformed request) |
 | 2 | `CorsGlobalFilter` | 403 (origin denied) |
-| 3 | `CorrelationIdFilterFactory` | — |
+| 3 | `CorrelationIdGlobalFilter` | — |
 | 4 | Spring Security `SecurityWebFilterChain` | 401 (no/invalid JWT), 403 (insufficient role) |
 | 5 | SCG `RouteLocator` | 404 (no matching route) |
 | 6 | SCG `RetryGatewayFilterFactory` | Retries transparently; 502 if all fail |
@@ -300,7 +300,7 @@ Client                  Gateway                           Upstream
 Order   Filter                          Source        Type
 ──────  ────────────────────────────    ──────────    ──────────────
 -200    CorsGlobalFilter                SCG built-in  Global (all routes)
--100    CorrelationIdFilterFactory      Custom        Global (all routes)
+-100    CorrelationIdGlobalFilter      Custom        Global (all routes)
   -1    SecurityWebFilterChain          Spring Sec    Security filter
   +0    Route predicates + per-route    SCG + YAML    Per-route
         filters (Retry, CB, headers)
@@ -314,7 +314,7 @@ Order   Filter                          Source        Type
 | Filter | Implementation | Notes |
 |--------|---------------|-------|
 | CORS | `spring.cloud.gateway.globalcors` | YAML config only |
-| Correlation ID | `CorrelationIdFilterFactory` | Only custom global filter |
+| Correlation ID | `CorrelationIdGlobalFilter` | Only custom global filter |
 | JWT Auth | Spring Security OAuth2 RS | `SecurityConfig.java` |
 | Metrics | Micrometer auto-config | No code needed |
 | Tracing | OTel Java agent auto-instrumentation | No code needed |
@@ -343,7 +343,7 @@ gateway
 ├── config/
 │   └── SecurityConfig.java          # OAuth2 RS + CORS + authorization rules
 ├── filter/
-│   └── CorrelationIdFilterFactory.java  # X-Correlation-ID global filter
+│   └── CorrelationIdGlobalFilter.java  # X-Correlation-ID global filter
 ├── web/
 │   └── FallbackController.java      # Circuit breaker fallback endpoint
 └── common/
@@ -646,30 +646,38 @@ public class FallbackController {
 
 ### 14.1 Structured Logging
 
-**logback-spring.xml:**
+**log4j2.xml** (JsonTemplateLayout):
 
 ```xml
-<configuration>
-    <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder class="net.logstash.logback.encoder.LogstashEncoder"/>
-    </appender>
-
-    <root level="INFO">
-        <appender-ref ref="JSON"/>
-    </root>
-
-    <logger name="gateway" level="DEBUG"/>
-</configuration>
+<Configuration status="WARN" shutdownHook="disable">
+    <Properties>
+        <Property name="defaultLogLevel">${env:DEFAULT_LOG_LEVEL:-INFO}</Property>
+    </Properties>
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <JsonTemplateLayout eventTemplateUri="classpath:log-layout.json"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="${defaultLogLevel}">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>
 ```
 
-**MDC context** populated by `CorrelationIdFilterFactory`:
+**log-layout.json** defines JSON fields: `timestamp`, `level`, `logger`, `message`, `thread`, `method`, `line`, `correlationId`, `traceId`, `spanId`, `exception`.
+
+**MDC context** populated by `CorrelationIdGlobalFilter`:
 
 ```java
-return chain.filter(exchange).contextWrite(ctx ->
-    ctx.put("correlationId", correlationId));
+.contextWrite(ctx -> {
+    MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+    return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+})
 ```
 
-`Hooks.enableAutomaticContextPropagation()` in `GatewayApplication.java` ensures MDC propagates through Reactor.
+`Hooks.enableAutomaticContextPropagation()` in `GatewayApplication.java` bridges Reactor Context into MDC across threads.
 
 ### 14.2 Metrics
 
@@ -973,21 +981,20 @@ api-gateway/
 │   │   │   ├── config/
 │   │   │   │   └── SecurityConfig.java
 │   │   │   ├── filter/
-│   │   │   │   └── CorrelationIdFilterFactory.java
+│   │   │   │   └── CorrelationIdGlobalFilter.java
 │   │   │   ├── web/
 │   │   │   │   └── FallbackController.java
 │   │   │   └── common/
-│   │   │       ├── exception/
-│   │   │       │   └── GlobalErrorHandler.java
 │   │   │       └── util/
 │   │   │           └── HeaderConstants.java
 │   │   └── resources/
 │   │       ├── application.yml
-│   │       └── logback-spring.xml
+│   │       ├── log4j2.xml
+│   │       └── log-layout.json
 │   └── test/
 │       ├── java/gateway/
 │       │   ├── filter/
-│       │   │   └── CorrelationIdFilterFactoryTest.java
+│       │   │   └── CorrelationIdGlobalFilterTest.java
 │       │   ├── web/
 │       │   │   └── FallbackControllerTest.java
 │       │   └── integration/
@@ -1018,70 +1025,49 @@ api-gateway/
 
 | Element | Convention | Example |
 |---------|-----------|---------|
-| Filter factories | `{Purpose}FilterFactory` | `CorrelationIdFilterFactory` |
+| Filter factories | `{Purpose}FilterFactory` | `CorrelationIdGlobalFilter` |
 | Controllers | `{Resource}Controller` | `FallbackController` |
 | Config classes | `{Domain}Config` | `SecurityConfig` |
 | Error handler | `Global{Type}Handler` | `GlobalErrorHandler` |
-| Test classes | `{ClassUnderTest}Test` | `CorrelationIdFilterFactoryTest` |
+| Test classes | `{ClassUnderTest}Test` | `CorrelationIdGlobalFilterTest` |
 
-### Filter Factory Template
+### GlobalFilter Template
 
 ```java
 @Component
-public class CorrelationIdFilterFactory
-        extends AbstractGatewayFilterFactory<CorrelationIdFilterFactory.Config> {
+public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
-    public CorrelationIdFilterFactory() {
-        super(Config.class);
-    }
+    public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
 
     @Override
-    public GatewayFilter apply(Config config) {
-        return (exchange, chain) -> {
-            // Pre-filter: ensure correlation ID exists
-            ...
-            return chain.filter(exchange).then(Mono.fromRunnable(() -> {
-                // Post-filter: add to response
-                ...
-            }));
-        };
-    }
+    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String correlationId = resolveCorrelationId(exchange);
+        exchange.getAttributes().put(CORRELATION_ID_ATTRIBUTE, correlationId);
 
-    public record Config(boolean enabled) {}
+        var mutatedExchange = exchange.mutate()
+                .request(exchange.getRequest().mutate()
+                        .header(HeaderConstants.X_CORRELATION_ID, correlationId).build())
+                .build();
+
+        return chain.filter(mutatedExchange)
+                .then(Mono.defer(() -> {
+                    mutatedExchange.getResponse().getHeaders()
+                            .add(HeaderConstants.X_CORRELATION_ID, correlationId);
+                    MDC.clear();
+                    return Mono.empty();
+                }))
+                .contextWrite(ctx -> {
+                    MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+                    return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+                })
+                .then();
+    }
 }
 ```
 
 ### Error Handling
 
-```java
-@Order(-1)
-@Component
-public class GlobalErrorHandler implements ErrorWebExceptionHandler {
-
-    @Override
-    public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
-        var status = resolveStatus(ex);
-        var body = new ErrorResponse(
-            status.value(),
-            status.getReasonPhrase(),
-            exchange.getAttribute(CORRELATION_ID)
-        );
-        exchange.getResponse().setStatusCode(status);
-        exchange.getResponse().getHeaders()
-            .setContentType(MediaType.APPLICATION_JSON);
-        return exchange.getResponse()
-            .writeWith(Mono.just(exchange.getResponse()
-                .bufferFactory()
-                .wrap(serialize(body))));
-    }
-
-    private HttpStatus resolveStatus(Throwable ex) {
-        return ex instanceof ResponseStatusException rse
-            ? HttpStatus.valueOf(rse.getBody().getStatus())
-            : HttpStatus.INTERNAL_SERVER_ERROR;
-    }
-}
-```
+Error responses currently use Spring Boot's default error handling (JSON for WebFlux). A custom `ErrorWebExceptionHandler` is a planned future improvement to standardize error response format.
 
 ### Reactor Best Practices
 
@@ -1112,7 +1098,7 @@ public class GlobalErrorHandler implements ErrorWebExceptionHandler {
 
 | Class | Framework | What to Test |
 |-------|-----------|-------------|
-| `CorrelationIdFilterFactory` | JUnit 5 + Mockito + StepVerifier | ID generation, propagation, missing ID handling |
+| `CorrelationIdGlobalFilter` | JUnit 5 + Mockito + StepVerifier | ID generation, propagation, missing ID handling |
 | `FallbackController` | JUnit 5 + Mockito | Response shape, correlation ID in response |
 | `GlobalErrorHandler` | JUnit 5 + Mockito | Status mapping, JSON body format |
 
@@ -1244,7 +1230,8 @@ spring:
 | `spring-boot-starter-oauth2-resource-server` | 4.x | JWT validation via OAuth2 RS |
 | `spring-cloud-starter-circuitbreaker-reactor-resilience4j` | 4.x | Circuit breaker |
 | `micrometer-registry-prometheus` | 1.x | Prometheus metric export |
-| `net.logstash.logback:logstash-logback-encoder` | 8.x | Structured JSON logging |
+| `spring-boot-starter-log4j2` | managed | Log4j2 SLF4J binding |
+| `log4j-layout-template-json` | managed | JSON template layout |
 | `opentelemetry-javaagent` | 2.x | Auto-instrumentation for tracing |
 
 ### Test

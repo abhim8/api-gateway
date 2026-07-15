@@ -1,6 +1,9 @@
 package gateway.filter;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import gateway.common.util.HeaderConstants;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -9,24 +12,18 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.util.UUID;
+class CorrelationIdGlobalFilterTest {
 
-import static org.assertj.core.api.Assertions.assertThat;
-
-class CorrelationIdFilterFactoryTest {
-
-    private final CorrelationIdFilterFactory filter = new CorrelationIdFilterFactory();
+    private final CorrelationIdGlobalFilter filter = new CorrelationIdGlobalFilter();
 
     @Test
     void shouldGenerateIdWhenNotPresent() {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
-        String responseId = exchange.getResponse().getHeaders()
-                .getFirst(HeaderConstants.X_CORRELATION_ID);
+        String responseId = exchange.getResponse().getHeaders().getFirst(HeaderConstants.X_CORRELATION_ID);
         assertThat(responseId).isNotNull();
         assertThat(isValidUuid(responseId)).isTrue();
     }
@@ -37,11 +34,9 @@ class CorrelationIdFilterFactoryTest {
         ServerWebExchange exchange = createExchange(existingId);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
-        String responseId = exchange.getResponse().getHeaders()
-                .getFirst(HeaderConstants.X_CORRELATION_ID);
+        String responseId = exchange.getResponse().getHeaders().getFirst(HeaderConstants.X_CORRELATION_ID);
         assertThat(responseId).isEqualTo(existingId);
     }
 
@@ -50,11 +45,9 @@ class CorrelationIdFilterFactoryTest {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
-        assertThat(exchange.getResponse().getHeaders()
-                .get(HeaderConstants.X_CORRELATION_ID))
+        assertThat(exchange.getResponse().getHeaders().get(HeaderConstants.X_CORRELATION_ID))
                 .isNotNull()
                 .isNotEmpty();
     }
@@ -64,11 +57,10 @@ class CorrelationIdFilterFactoryTest {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
-        String requestId = chain.getExchangedExchange().getRequest().getHeaders()
-                .getFirst(HeaderConstants.X_CORRELATION_ID);
+        String requestId =
+                chain.getExchangedExchange().getRequest().getHeaders().getFirst(HeaderConstants.X_CORRELATION_ID);
         assertThat(requestId).isNotNull();
         assertThat(isValidUuid(requestId)).isTrue();
     }
@@ -78,10 +70,9 @@ class CorrelationIdFilterFactoryTest {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain))
-                .verifyComplete();
+        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
 
-        String attribute = exchange.getAttribute(CorrelationIdFilterFactory.CORRELATION_ID_ATTRIBUTE);
+        String attribute = exchange.getAttribute(CorrelationIdGlobalFilter.CORRELATION_ID_ATTRIBUTE);
         assertThat(attribute).isNotNull();
         assertThat(isValidUuid(attribute)).isTrue();
     }
@@ -95,7 +86,7 @@ class CorrelationIdFilterFactoryTest {
 
         StepVerifier.create(result)
                 .expectAccessibleContext()
-                .hasKey(CorrelationIdFilterFactory.CORRELATION_ID_ATTRIBUTE)
+                .hasKey(CorrelationIdGlobalFilter.CORRELATION_ID_ATTRIBUTE)
                 .then()
                 .verifyComplete();
     }
