@@ -5,6 +5,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      - GATEWAY_AUTHENTICATION_PROVIDER=mock
       - DEFAULT_LOG_LEVEL=${DEFAULT_LOG_LEVEL:-INFO}
       - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-https://app.example.com}
     restart: unless-stopped

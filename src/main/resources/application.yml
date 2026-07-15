@@ -99,9 +99,6 @@ logging:
 otel:
   service:
     name: ${spring.application.name}
-  resource:
-    attributes:
-      service.name: ${spring.application.name}
   traces:
     exporter: ${OTEL_TRACES_EXPORTER:otlp}
   logs:

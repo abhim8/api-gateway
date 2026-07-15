@@ -20,8 +20,6 @@
     <properties>
         <java.version>26</java.version>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
-        <spring-cloud-gateway.version>5.0.2</spring-cloud-gateway.version>
-        <spring-cloud-circuitbreaker.version>5.0.2</spring-cloud-circuitbreaker.version>
         <wiremock.version>3.9.2</wiremock.version>
         <awaitility.version>4.2.2</awaitility.version>
         <opentelemetry.version>1.64.0</opentelemetry.version>
@@ -35,20 +33,6 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
                 <version>${spring-cloud.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-gateway-dependencies</artifactId>
-                <version>${spring-cloud-gateway.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-circuitbreaker-dependencies</artifactId>
-                <version>${spring-cloud-circuitbreaker.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

@@ -155,7 +155,7 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | Key / Env Variable | Default | Description |
 |--------------------|---------|-------------|
 | `server.port` | `8000` | HTTP listen port |
-| `gateway.auth.mode` / `GATEWAY_AUTH_MODE` | `mock` | Authentication provider (`mock` or `remote`) |
+| `gateway.authentication.provider` / `GATEWAY_AUTHENTICATION_PROVIDER` | `mock` | Authentication provider (`mock` or `remote`) |
 | `GATEWAY_CORS_ORIGINS` | `https://app.example.com` | Allowed CORS origins |
 | `spring.cloud.gateway.httpclient.response-timeout` | `5s` | Global upstream timeout |
 | `spring.codec.max-in-memory-size` | `256KB` | Request body size limit |
@@ -222,7 +222,7 @@ graph LR
 | `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O — no HTTP, no JWT, no crypto. Suitable for local development and CI. |
 | `remote` | `RemoteAuthenticationProvider` | Throws `UnsupportedOperationException`. Placeholder for future Auth Platform integration. Will call the Auth Platform's `/auth/validate` endpoint. |
 
-Configure via `GATEWAY_AUTH_MODE` environment variable or `gateway.auth.mode` in `application.yml`.
+Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`.
 
 ## Observability
 
