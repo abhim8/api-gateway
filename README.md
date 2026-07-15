@@ -1,3 +1,9 @@
+![Java](https://img.shields.io/badge/Java-26-orange)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0-brightgreen)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue)
+![Build](https://github.com/abhim8/api-gateway/actions/workflows/build.yml/badge.svg)
+![Spring Cloud Gateway](https://img.shields.io/badge/Spring_Cloud_Gateway-5.x-6DB33F)
+
 # API Gateway
 
 Stateless, reactive front-door proxy for a microservices platform. Built with Spring Cloud Gateway 5.x on Java 26 - WebFlux, Netty, Reactor.
