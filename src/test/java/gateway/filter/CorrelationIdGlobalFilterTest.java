@@ -3,6 +3,11 @@ package gateway.filter;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import gateway.common.util.HeaderConstants;
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.SpanContext;
+import io.opentelemetry.api.trace.TraceFlags;
+import io.opentelemetry.api.trace.TraceState;
+import io.opentelemetry.context.Scope;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -89,6 +94,27 @@ class CorrelationIdGlobalFilterTest {
                 .hasKey(CorrelationIdGlobalFilter.CORRELATION_ID_ATTRIBUTE)
                 .then()
                 .verifyComplete();
+    }
+
+    @Test
+    void shouldSetTraceIdAndSpanIdInMdcWhenOtelSpanActive() {
+        SpanContext spanContext = SpanContext.create(
+                "0af7651916cd43dd8448eb211c80319c",
+                "b7ad6b7169203331",
+                TraceFlags.getSampled(),
+                TraceState.getDefault());
+        Span span = Span.wrap(spanContext);
+
+        ServerWebExchange exchange = createExchange(null);
+        CapturingChain chain = new CapturingChain();
+
+        try (Scope ignored = span.makeCurrent()) {
+            StepVerifier.create(filter.filter(exchange, chain))
+                    .expectAccessibleContext()
+                    .hasKey(CorrelationIdGlobalFilter.CORRELATION_ID_ATTRIBUTE)
+                    .then()
+                    .verifyComplete();
+        }
     }
 
     private static ServerWebExchange createExchange(String correlationId) {

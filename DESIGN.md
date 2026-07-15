@@ -353,7 +353,7 @@ gateway
         └── HeaderConstants.java     # Header name constants
 ```
 
-**Total custom classes: 6**
+**Total custom classes: 6** (GatewayApplication, SecurityConfig, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
 
 ### Package Dependency Rules
 
@@ -679,6 +679,8 @@ public class FallbackController {
 
 `Hooks.enableAutomaticContextPropagation()` in `GatewayApplication.java` bridges Reactor Context into MDC across threads.
 
+The `CorrelationIdGlobalFilter` also reads the current OpenTelemetry span via `Span.current()` and populates `traceId`/`spanId` in MDC when a valid span context exists (e.g., when the OTel Java agent or SDK is active).
+
 ### 14.2 Metrics
 
 Micrometer auto-configures with `micrometer-registry-prometheus`:
@@ -722,6 +724,8 @@ This auto-instruments:
 | `/actuator/prometheus` | Metrics scrape target | Prometheus |
 
 No custom health indicators — gateway has no external dependencies to check. `application.yml` configures separate probe paths.
+
+Error responses are handled by `GlobalErrorHandler` (`ErrorWebExceptionHandler`), which intercepts exceptions at order -2 and returns structured JSON with status, error, path, correlationId, and timestamp.
 
 ---
 
@@ -1067,7 +1071,19 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
 ### Error Handling
 
-Error responses currently use Spring Boot's default error handling (JSON for WebFlux). A custom `ErrorWebExceptionHandler` is a planned future improvement to standardize error response format.
+Error responses use `GlobalErrorHandler` (`ErrorWebExceptionHandler` at order -2), which returns structured JSON:
+
+```json
+{
+  "timestamp": "2026-07-15T12:00:00.000Z",
+  "status": 404,
+  "error": "Not Found",
+  "path": "/api/v1/nonexistent",
+  "correlationId": "a1b2c3d4-..."
+}
+```
+
+Fields: `timestamp`, `status`, `error`, `path`, `correlationId`. The handler maps `ResponseStatusException` status codes and falls back to 500 for unhandled exceptions.
 
 ### Reactor Best Practices
 
@@ -1210,7 +1226,7 @@ spring:
 | **M2** | Correlation ID + structured logging | ~1-2 days | 2 |
 | **M3** | JWT authentication + security config | ~2-3 days | 2 |
 | **M4** | Resilience (CB + retry + timeout + fallback) | ~2-3 days | 1 |
-| **M5** | Metrics + tracing + health endpoints | ~1-2 days | 0 |
+| **M5** | Error handling + metrics + tracing + health endpoints | ~1-2 days | 1 |
 | **M6** | Docker + K8s deployment | ~2-3 days | 0 |
 | **M7** | Comprehensive testing + production hardening | ~2-3 days | 0 |
 

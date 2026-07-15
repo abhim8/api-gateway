@@ -24,6 +24,7 @@
         <spring-cloud-circuitbreaker.version>5.0.2</spring-cloud-circuitbreaker.version>
         <wiremock.version>3.9.2</wiremock.version>
         <awaitility.version>4.2.2</awaitility.version>
+        <opentelemetry.version>1.64.0</opentelemetry.version>
         <jacoco.version>0.8.12</jacoco.version>
         <spotless.version>2.43.0</spotless.version>
         <jib.version>3.4.4</jib.version>
@@ -49,6 +50,13 @@
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-circuitbreaker-dependencies</artifactId>
                 <version>${spring-cloud-circuitbreaker.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.opentelemetry</groupId>
+                <artifactId>opentelemetry-bom</artifactId>
+                <version>${opentelemetry.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -130,6 +138,12 @@
             <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
 
+        <!-- OpenTelemetry -->
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-api</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -162,6 +176,16 @@
             <groupId>org.awaitility</groupId>
             <artifactId>awaitility</artifactId>
             <version>${awaitility.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.opentelemetry</groupId>
+            <artifactId>opentelemetry-sdk-testing</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>

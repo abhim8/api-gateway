@@ -98,3 +98,17 @@ resilience4j:
 logging:
   level:
     root: ${DEFAULT_LOG_LEVEL:INFO}
+
+otel:
+  service:
+    name: ${spring.application.name}
+  resource:
+    attributes:
+      service.name: ${spring.application.name}
+  traces:
+    exporter: ${OTEL_TRACES_EXPORTER:otlp}
+  logs:
+    exporter: none
+  metrics:
+    exporter: none
+  propagators: tracecontext,baggage

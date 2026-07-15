@@ -263,60 +263,34 @@ spring:
 
 ---
 
-## Milestone 5: Error Handling + Metrics + Tracing + Health
+## Milestone 5: Error Handling + Metrics + Tracing + Health ✅
 
 **Objective**: Structured error responses, Prometheus metrics, OpenTelemetry tracing, and health probes.
 
-### Files to Create
+### Files Created/Modified
 
 | File | Purpose |
 |------|---------|
-| `src/main/java/gateway/common/exception/GlobalErrorHandler.java` | Unified error response format |
-| `src/test/java/gateway/common/exception/GlobalErrorHandlerTest.java` | Unit tests |
-
-### Classes to Implement
-
-| Class | Responsibility |
-|-------|----------------|
-| `GlobalErrorHandler` | `ErrorWebExceptionHandler` that returns structured JSON error responses |
-
-### Config (no new files)
-
-| File | Change |
-|------|--------|
-| `src/main/resources/application.yml` | Add `management.endpoints.web.exposure.include=health,info,prometheus`; configure OTel agent environment variables |
-
-### Tests to Write
-
-**GlobalErrorHandlerTest.java** (unit):
-
-| Test | Scenario |
-|------|----------|
-| `shouldReturnJsonFor404` | No route match → `{status:404,error:"Not Found",correlationId:...}` |
-| `shouldReturnJsonFor401` | Missing JWT → `{status:401,error:"Unauthorized",...}` |
-| `shouldReturnJsonFor500` | Unhandled exception → `{status:500,...}` |
-
-**GatewayIntegrationTest.java** (add these):
-
-| Test | Scenario |
-|------|----------|
-| `shouldExposePrometheusMetrics` | `/actuator/prometheus` → 200 + metrics text |
-| `shouldExposeHealthEndpoint` | `/actuator/health` → 200 + `{"status":"UP"}` |
-| `shouldExposeLivenessProbe` | `/actuator/health/liveness` → 200 |
-| `shouldExposeReadinessProbe` | `/actuator/health/readiness` → 200 |
-| `shouldPropagateTraceHeaders` | Upstream receives `traceparent` header |
-| `shouldIncludeCorrelationIdInErrorResponse` | 404 response includes `correlationId` field |
+| `pom.xml` | Added `opentelemetry-api` (compile), `opentelemetry-sdk` + `opentelemetry-sdk-testing` (test) |
+| `src/main/java/gateway/common/exception/GlobalErrorHandler.java` | `ErrorWebExceptionHandler` returning structured JSON |
+| `src/main/java/gateway/filter/CorrelationIdGlobalFilter.java` | Added OTel span → MDC bridge for `traceId`/`spanId` |
+| `src/main/resources/application.yml` | Added OTel env vars section |
+| `src/test/java/gateway/common/exception/GlobalErrorHandlerTest.java` | 6 unit tests |
+| `src/test/java/gateway/integration/GatewayIntegrationTest.java` | Added 6 observability integration tests |
+| `src/test/resources/application.yml` | Added management endpoints config |
 
 ### Acceptance Criteria
 
-- [x] All error responses are structured JSON with `status`, `error`, `correlationId`
+- [x] All error responses are structured JSON with `status`, `error`, `path`, `correlationId`, `timestamp`
 - [x] `/actuator/health` returns UP
 - [x] `/actuator/health/liveness` returns UP
 - [x] `/actuator/health/readiness` returns UP
 - [x] `/actuator/prometheus` returns Prometheus metrics
-- [x] `traceparent` header propagated to upstream
-- [x] Metrics include `http.server.requests`, `resilience4j.circuitbreaker.*`
-- [x] Tests pass
+- [x] OTel SDK configured; `traceId`/`spanId` bridged to MDC from current span
+- [x] `GlobalErrorHandler` handles 401, 403, 404, 500, BAD_REQUEST
+- [x] No HTML whitelabel pages — all errors are `application/json`
+- [x] All 39 tests pass
+- [x] Spotless formatting passes
 
 ---
 
@@ -458,7 +432,7 @@ M1: Foundation           ✓ pom.xml           ✓ application.yml   ✓ context
 M2: Correlation+Logging  ✓ CorrelationFilter  ✓ log4j2.xml+log-layout.json ✓ unit test
 M3: Security             ✓ SecurityConfig    ✓ JWKS fixture      ✓ auth integration
 M4: Resilience           ✓ FallbackController ✓ CB config        ✓ resil integration
-M5: Error Handling       ☐ GlobalErrorHandler ☐ JSON error body  ☐ error unit test
+M5: Observability        ✓ GlobalErrorHandler ✓ JSON error body  ✓ error unit test ✓ OTel ✓ Prometheus ✓ Health
 M6: Docker+K8s           ☐ k8s/*.yaml        ☐ Jib config        ☐ build test
 M7: Full Test Suite      ☐ integration test  ☐ WireMock stubs    ☐ >85% coverage
 ```

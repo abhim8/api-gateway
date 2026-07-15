@@ -1,6 +1,7 @@
 package gateway.filter;
 
 import gateway.common.util.HeaderConstants;
+import io.opentelemetry.api.trace.Span;
 import java.util.UUID;
 import org.slf4j.MDC;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -20,6 +21,9 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
         String correlationId = resolveCorrelationId(exchange);
         exchange.getAttributes().put(CORRELATION_ID_ATTRIBUTE, correlationId);
 
+        String traceId = resolveTraceId();
+        String spanId = resolveSpanId();
+
         ServerWebExchange mutatedExchange = exchange.mutate()
                 .request(exchange.getRequest()
                         .mutate()
@@ -36,6 +40,12 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                 }))
                 .contextWrite(ctx -> {
                     MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+                    if (traceId != null) {
+                        MDC.put("traceId", traceId);
+                    }
+                    if (spanId != null) {
+                        MDC.put("spanId", spanId);
+                    }
                     return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                 })
                 .then();
@@ -52,5 +62,21 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
             return existing;
         }
         return UUID.randomUUID().toString();
+    }
+
+    private static String resolveTraceId() {
+        Span span = Span.current();
+        if (span.getSpanContext().isValid()) {
+            return span.getSpanContext().getTraceId();
+        }
+        return null;
+    }
+
+    private static String resolveSpanId() {
+        Span span = Span.current();
+        if (span.getSpanContext().isValid()) {
+            return span.getSpanContext().getSpanId();
+        }
+        return null;
     }
 }

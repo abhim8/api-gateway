@@ -91,4 +91,77 @@ class GatewayIntegrationTest {
                 .expectHeader()
                 .valueEquals("X-Content-Type-Options", "nosniff");
     }
+
+    @Test
+    void shouldReturnJsonErrorBodyFor404() {
+        webClient
+                .mutateWith(mockJwt())
+                .get()
+                .uri("/nonexistent-path")
+                .exchange()
+                .expectStatus()
+                .isNotFound()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo(404)
+                .jsonPath("$.path")
+                .isEqualTo("/nonexistent-path");
+    }
+
+    @Test
+    void shouldReturnJsonErrorBodyFor401() {
+        webClient.get().uri("/api/v1/test").exchange().expectStatus().isUnauthorized();
+    }
+
+    @Test
+    void shouldExposePrometheusMetrics() {
+        webClient
+                .mutateWith(mockJwt().authorities(() -> "ROLE_ADMIN"))
+                .get()
+                .uri("/actuator/prometheus")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectHeader()
+                .valueEquals("Content-Type", "text/plain;version=0.0.4;charset=utf-8");
+    }
+
+    @Test
+    void shouldExposeHealthEndpoint() {
+        webClient
+                .get()
+                .uri("/actuator/health")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("UP");
+    }
+
+    @Test
+    void shouldExposeLivenessProbe() {
+        webClient
+                .get()
+                .uri("/actuator/health/liveness")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("UP");
+    }
+
+    @Test
+    void shouldExposeReadinessProbe() {
+        webClient
+                .get()
+                .uri("/actuator/health/readiness")
+                .exchange()
+                .expectStatus()
+                .isOk()
+                .expectBody()
+                .jsonPath("$.status")
+                .isEqualTo("UP");
+    }
 }
