@@ -16,10 +16,10 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 
 | Goal | How |
 |------|-----|
-| **Security-first** | Validate every request with JWT via Spring Security OAuth2 Resource Server |
+| **Security-first** | Delegate authentication to the Auth Platform (separate service) |
 | **Resilient by default** | Circuit breaker, retry, and timeout via SCG built-in filter factories |
 | **Observable** | Structured JSON logs, Micrometer metrics, OpenTelemetry traces |
-| **Operable** | Health probes, graceful shutdown, Docker + Kubernetes ready |
+| **Operable** | Health probes, graceful shutdown, Docker ready |
 | **Maintainable** | Minimal custom code (~6 classes); everything else is YAML config |
 
 ---
@@ -29,7 +29,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 ### V1 Scope
 
 - HTTP(S) request routing to upstream services (static YAML routes)
-- JWT validation via Spring Security OAuth2 Resource Server (JWKS, RS256/ES256)
+- Authentication delegated to the Auth Platform (remote service)
 - Correlation ID generation and propagation (`X-Correlation-ID`)
 - Structured JSON logging with MDC context (correlation ID, trace ID)
 - Micrometer metrics exposed via `/actuator/prometheus`
@@ -40,7 +40,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 - Circuit breaker with fallback (SCG `CircuitBreakerGatewayFilterFactory`)
 - Request/response header manipulation (SCG built-in filters)
 - Health + readiness probes (`/actuator/health`)
-- Docker image (Jib) + Kubernetes manifests
+- Docker image
 - Comprehensive test suite (unit + integration with WireMock)
 
 ### Explicitly V2+
@@ -67,7 +67,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 | ID | Requirement | How |
 |----|-------------|-----|
 | FR-01 | Route requests based on path, method, and headers | SCG YAML routes + predicates |
-| FR-02 | Validate JWT tokens on protected routes | Spring Security OAuth2 Resource Server |
+| FR-02 | Validate JWT tokens on protected routes | RemoteAuthenticationProvider (delegates to Auth Platform) |
 | FR-03 | Apply circuit breaker per upstream route | SCG `CircuitBreakerGatewayFilterFactory` |
 | FR-04 | Retry failed upstream requests on transient errors | SCG `RetryGatewayFilterFactory` |
 | FR-05 | Enforce upstream request timeouts | Route metadata `response-timeout` |
@@ -120,12 +120,11 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
             │  Netty / WebFlux / Reactor      │
             │  Java 21                        │
             │                                 │
-            │  ┌─── Filter Pipeline ───────┐  │
-            │  │ CORS → Correlation →      │  │
-            │  │ Spring Security (JWT) →   │  │
-            │  │ Route Match → Resilience  │  │
-            │  │ → Proxy → Response        │  │
-            │  └───────────────────────────┘  │
+             │  ┌─── Filter Pipeline ───────┐  │
+             │  │ CORS → Correlation →      │  │
+             │  │ Route Match → Resilience  │  │
+             │  │ → Proxy → Response        │  │
+             │  └───────────────────────────┘  │
             └────┬────────┬────────┬──────────┘
                  │        │        │
            ┌─────┘        │        └─────┐
@@ -148,7 +147,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 1. **Stateless**: Zero local state. No Redis, no database. Every pod is identical.
 2. **Configuration over code**: SCG built-in filters handle 80% of requirements. Custom code is the exception.
 3. **Reactive end-to-end**: Netty event loop does all work — no thread pool blocking.
-4. **Fail-fast**: Invalid JWT, missing auth, or bad requests are rejected immediately — no upstream round-trip.
+4. **Fail-fast**: Expired or malformed requests are rejected immediately — no upstream round-trip.
 5. **Defend upstreams**: Circuit breakers, retries, and timeouts protect backend services from cascading failure.
 
 ---
@@ -160,11 +159,11 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 │                    API Gateway (Pod)                      │
 │                                                           │
 │  ┌──────────────────────────────────────────────────┐    │
-│  │              Spring Security Chain                │    │
+│  │              Security Chain                       │    │
 │  │  ┌────────────────────────────────────────────┐  │    │
-│  │  │  OAuth2 Resource Server (JWT validation)    │  │    │
-│  │  │  - JWKS fetching (auto, cached)             │  │    │
-│  │  │  - Token parsing (Nimbus)                   │  │    │
+│  │  │  AuthenticationProvider (remote)            │  │    │
+│  │  │  - Delegates to Auth Platform               │  │    │
+│  │  │  - Reactive WebClient call                  │  │    │
 │  │  │  - Principal extraction                      │  │    │
 │  │  └────────────────────────────────────────────┘  │    │
 │  └──────────────────────────────────────────────────┘    │
@@ -199,7 +198,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 
 | Component | Type | Responsibility |
 |-----------|------|----------------|
-| `SecurityWebFilterChain` | Spring Security | JWT validation, path authorization, CORS |
+| `AuthenticationProvider` | Spring Security | JWT validation, path authorization, CORS |
 | `RouteLocator` | SCG built-in | Route matching from YAML definitions |
 | `CorrelationIdGlobalFilter` | Custom `GlobalFilter` | Generate/propagate `X-Correlation-ID` |
 | `RetryGatewayFilterFactory` | SCG built-in | Retry on 5xx with exponential backoff |
@@ -340,8 +339,10 @@ Order   Filter                          Source        Type
 ```
 gateway
 ├── GatewayApplication.java          # @SpringBootApplication
-├── config/
-│   └── SecurityConfig.java          # OAuth2 RS + CORS + authorization rules
+├── auth/
+│   ├── AuthenticationProvider.java  # Authentication delegation interface
+│   ├── AuthenticationResult.java    # Auth response model
+│   └── RemoteAuthenticationProvider.java  # Remote Auth Platform client
 ├── filter/
 │   └── CorrelationIdGlobalFilter.java  # X-Correlation-ID global filter
 ├── web/
@@ -353,7 +354,7 @@ gateway
         └── HeaderConstants.java     # Header name constants
 ```
 
-**Total custom classes: 6** (GatewayApplication, SecurityConfig, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
+**Total custom classes: 8** (GatewayApplication, AuthenticationProvider, AuthenticationResult, RemoteAuthenticationProvider, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
 
 ### Package Dependency Rules
 
@@ -441,10 +442,9 @@ spring:
 1. Request enters → Netty reads HTTP headers
 2. CORS validation (globalcors)
 3. Correlation ID filter adds X-Correlation-ID
-4. Spring Security checks JWT for protected paths
-5. SCG RouteLocator evaluates each route's predicates in order
-6. First matching route: combine global + route filters
-7. No match: 404
+4. SCG RouteLocator evaluates each route's predicates in order
+5. First matching route: combine global + route filters
+6. No match: 404
 ```
 
 **No custom route resolution code.** SCG's built-in `RouteLocator` with YAML definitions handles everything.
@@ -468,9 +468,9 @@ spring:
 
 ## 11. Security Design
 
-### JWT Authentication
+### Authentication Delegation
 
-Spring Security OAuth2 Resource Server handles everything:
+Authentication is delegated to the Auth Platform via a reactive `WebClient` call:
 
 ```yaml
 spring:
@@ -478,16 +478,26 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: https://auth.example.com
-          jwk-set-uri: https://auth.example.com/.well-known/jwks.json
+          issuer-uri: https://auth-platform.example.com
+          jwk-set-uri: https://auth-platform.example.com/.well-known/jwks.json
 ```
 
-**What this gives us for free:**
-- JWKS fetching and caching (auto, configurable TTL)
-- JWT signature validation (RS256, ES256, etc.)
-- Expiration, issuer, audience validation
-- Principal extraction to `exchange.getPrincipal()`
-- Reactive `ReactiveJwtDecoder` — no blocking
+**AuthenticationProvider interface:**
+- `Mono<AuthenticationResult> authenticate(ServerWebExchange exchange)`
+- Receives token from `Authorization` header
+- Delegates validation to Auth Platform via HTTP
+- Returns `AuthenticationResult` with principal, roles, success/failure
+
+**RemoteAuthenticationProvider (stub):**
+- Implements `AuthenticationProvider` using `WebClient`
+- Calls `POST /auth/validate` on Auth Platform
+- Configurable timeout, retry, circuit breaker
+- Placeholder for future Auth Platform integration
+
+**Future:**
+- Replace stub with actual Auth Platform gRPC/HTTP endpoint
+- Add token caching with TTL
+- Introduce audience/scope validation
 
 ### Security Rules
 
@@ -743,7 +753,7 @@ Error responses are handled by `GlobalErrorHandler` (`ErrorWebExceptionHandler`)
 
 ```yaml
 server:
-  port: 8080
+  port: 8000
   shutdown: graceful
   netty:
     connection-timeout: 5s
@@ -838,125 +848,43 @@ No custom `@ConfigurationProperties` classes — everything uses Spring Boot's n
 
 ### Docker Image
 
-**Jib Maven plugin** builds optimized OCI image:
+Multi-stage build with `Dockerfile`:
 
-```xml
-<plugin>
-    <groupId>com.google.cloud.tools</groupId>
-    <artifactId>jib-maven-plugin</artifactId>
-    <configuration>
-        <from>
-            <image>eclipse-temurin:21-jre-alpine</image>
-        </from>
-        <to>
-            <image>registry.example.com/api-gateway</image>
-            <tags>
-                <tag>${project.version}</tag>
-                <tag>latest</tag>
-            </tags>
-        </to>
-        <container>
-            <jvmFlags>
-                <jvmFlag>-Xms256m</jvmFlag>
-                <jvmFlag>-Xmx256m</jvmFlag>
-                <jvmFlag>-XX:+UseZGC</jvmFlag>
-                <jvmFlag>-XX:MaxMetaspaceSize=128m</jvmFlag>
-                <jvmFlag>-Djava.security.egd=file:/dev/./urandom</jvmFlag>
-            </jvmFlags>
-            <ports>
-                <port>8080</port>
-            </ports>
-            <format>OCI</format>
-        </container>
-    </configuration>
-</plugin>
+```dockerfile
+# Stage 1: Build the application
+FROM eclipse-temurin:21-jdk AS builder
+WORKDIR /build
+COPY mvnw pom.xml ./
+COPY .mvn .mvn
+RUN ./mvnw -B dependency:go-offline
+COPY src src
+RUN ./mvnw -B package -DskipTests
+
+# Stage 2: Runtime
+FROM eclipse-temurin:21-jre AS runtime
+RUN groupadd -r gateway && useradd -r -g gateway gateway
+USER gateway
+WORKDIR /app
+COPY --from=builder /build/target/*.jar app.jar
+EXPOSE 8000
+ENTRYPOINT ["java", "-jar", "app.jar"]
 ```
 
-### Kubernetes Deployment
+Build:
+```bash
+docker build -t api-gateway .
+docker run -p 8000:8000 api-gateway
+```
 
-```yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: api-gateway
-spec:
-  replicas: 2
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 1
-      maxUnavailable: 0
-  selector:
-    matchLabels:
-      app: api-gateway
-  template:
-    metadata:
-      labels:
-        app: api-gateway
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "8080"
-        prometheus.io/path: "/actuator/prometheus"
-    spec:
-      containers:
-        - name: gateway
-          image: registry.example.com/api-gateway:1.0.0
-          ports:
-            - containerPort: 8080
-          envFrom:
-            - configMapRef: { name: gateway-config }
-            - secretRef: { name: gateway-secrets }
-          livenessProbe:
-            httpGet:
-              path: /actuator/health/liveness
-              port: 8080
-            initialDelaySeconds: 15
-            periodSeconds: 10
-            timeoutSeconds: 3
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 20
-            periodSeconds: 5
-            timeoutSeconds: 3
-          resources:
-            requests:
-              cpu: 250m
-              memory: 256Mi
-            limits:
-              cpu: 500m
-              memory: 384Mi
-          lifecycle:
-            preStop:
-              exec:
-                command: ["sh", "-c", "sleep 15"]
----
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: api-gateway
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: api-gateway
-  minReplicas: 2
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 60
+Or with Docker Compose:
+```bash
+docker compose up --build
 ```
 
 ### Graceful Shutdown
 
 - `server.shutdown=graceful` — Spring Boot drains in-flight requests
 - `spring.lifecycle.timeout-per-shutdown-phase=30s` — max drain window
-- PreStop hook (15s sleep) — gives K8s time to remove pod from Service endpoints before SIGTERM
 
 ---
 
@@ -969,15 +897,10 @@ api-gateway/
 ├── ROADMAP.md                         # Implementation milestones
 ├── AGENTS.md                          # AI coding agent context
 ├── README.md                          # Quick start
+├── docker-compose.yml                 # Docker Compose (build + run)
+├── Dockerfile                         # Multi-stage Docker build
 ├── pom.xml                            # Maven build
 ├── mvnw / mvnw.cmd
-├── scripts/
-│   └── docker-compose.yml             # Local upstreams (WireMock)
-├── k8s/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   ├── configmap.yaml
-│   └── hpa.yaml
 ├── src/
 │   ├── main/
 │   │   ├── java/gateway/
@@ -989,6 +912,8 @@ api-gateway/
 │   │   │   ├── web/
 │   │   │   │   └── FallbackController.java
 │   │   │   └── common/
+│   │   │       ├── exception/
+│   │   │       │   └── GlobalErrorHandler.java
 │   │   │       └── util/
 │   │   │           └── HeaderConstants.java
 │   │   └── resources/
@@ -1001,15 +926,14 @@ api-gateway/
 │       │   │   └── CorrelationIdGlobalFilterTest.java
 │       │   ├── web/
 │       │   │   └── FallbackControllerTest.java
+│       │   ├── common/
+│       │   │   └── exception/
+│       │   │       └── GlobalErrorHandlerTest.java
 │       │   └── integration/
-│       │       └── GatewayIntegrationTest.java
+│       │       ├── GatewayIntegrationTest.java
+│       │       └── GatewayResilienceIntegrationTest.java
 │       └── resources/
-│           ├── application-test.yml
-│           └── wiremock/
-│               └── __files/
-│                   └── users.json
-└── .github/workflows/
-    └── ci.yml
+│           └── application.yml
 ```
 
 ---
@@ -1224,10 +1148,10 @@ spring:
 |-------|-------|----------|-------------|
 | **M1** | Scaffold + build + basic routing | ~2-3 days | 2 |
 | **M2** | Correlation ID + structured logging | ~1-2 days | 2 |
-| **M3** | JWT authentication + security config | ~2-3 days | 2 |
+| **M3** | Auth delegation (AuthenticationProvider interface) | ~2-3 days | 3 |
 | **M4** | Resilience (CB + retry + timeout + fallback) | ~2-3 days | 1 |
 | **M5** | Error handling + metrics + tracing + health endpoints | ~1-2 days | 1 |
-| **M6** | Docker + K8s deployment | ~2-3 days | 0 |
+| **M6** | Docker deployment (Dockerfile, docker-compose.yml) | ~1 day | 0 |
 | **M7** | Comprehensive testing + production hardening | ~2-3 days | 0 |
 
 **Total:** ~14-19 days. ~6 custom classes. The rest is YAML configuration.
@@ -1243,12 +1167,11 @@ spring:
 | `spring-boot-starter-webflux` | 4.x | Reactive web server (Netty) |
 | `spring-cloud-starter-gateway` | 5.x | Routing, predicates, filter chain |
 | `spring-boot-starter-actuator` | 4.x | Health, metrics, info endpoints |
-| `spring-boot-starter-oauth2-resource-server` | 4.x | JWT validation via OAuth2 RS |
 | `spring-cloud-starter-circuitbreaker-reactor-resilience4j` | 4.x | Circuit breaker |
 | `micrometer-registry-prometheus` | 1.x | Prometheus metric export |
 | `spring-boot-starter-log4j2` | managed | Log4j2 SLF4J binding |
 | `log4j-layout-template-json` | managed | JSON template layout |
-| `opentelemetry-javaagent` | 2.x | Auto-instrumentation for tracing |
+| `opentelemetry-javaagent` (runtime) | 2.x | Auto-instrumentation for tracing |
 
 ### Test
 
@@ -1258,3 +1181,9 @@ spring:
 | `io.projectreactor:reactor-test` | StepVerifier |
 | `org.wiremock:wiremock-standalone` | HTTP stub for upstreams |
 | `org.springframework.security:spring-security-test` | JWT test helpers |
+|
+### Custom
+|
+| Package | Classes |
+|---------|---------|
+| `gateway.auth` | AuthenticationProvider, AuthenticationResult, RemoteAuthenticationProvider |

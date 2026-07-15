@@ -3,23 +3,12 @@ package gateway.integration;
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options;
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.awaitility.Awaitility.await;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
-import com.nimbusds.jose.JWSAlgorithm;
-import com.nimbusds.jose.JWSHeader;
-import com.nimbusds.jose.crypto.RSASSASigner;
-import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
-import com.nimbusds.jose.jwk.gen.RSAKeyGenerator;
-import com.nimbusds.jose.util.JSONObjectUtils;
-import com.nimbusds.jwt.JWTClaimsSet;
-import com.nimbusds.jwt.SignedJWT;
-import java.util.Date;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,37 +30,15 @@ import org.springframework.test.web.reactive.server.WebTestClient;
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class GatewayResilienceIntegrationTest {
 
-    private static final String JWT_ISSUER = "https://test-issuer.example.com";
-
     static WireMockServer wiremock = new WireMockServer(options().dynamicPort());
 
-    static RSAKey rsaKey;
-
     static {
-        try {
-            wiremock.start();
-            rsaKey = new RSAKeyGenerator(2048).keyID("test-key").generate();
-            serveJwks();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private static void serveJwks() throws Exception {
-        JWKSet jwkSet = new JWKSet(rsaKey.toPublicJWK());
-        wiremock.stubFor(get(urlPathEqualTo("/.well-known/jwks.json"))
-                .willReturn(aResponse()
-                        .withHeader("Content-Type", "application/json")
-                        .withBody(JSONObjectUtils.toJSONString(jwkSet.toJSONObject()))));
+        wiremock.start();
     }
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
         registry.add("wiremock.server.port", wiremock::port);
-        registry.add(
-                "spring.security.oauth2.resourceserver.jwt.jwk-set-uri",
-                () -> "http://localhost:" + wiremock.port() + "/.well-known/jwks.json");
-        registry.add("spring.security.oauth2.resourceserver.jwt.issuer-uri", () -> JWT_ISSUER);
     }
 
     @LocalServerPort
@@ -89,38 +56,17 @@ class GatewayResilienceIntegrationTest {
     @AfterEach
     void tearDown() {
         wiremock.resetAll();
-        try {
-            serveJwks();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private String createJwt() throws Exception {
-        RSASSASigner signer = new RSASSASigner(rsaKey);
-        Date now = new Date();
-        JWTClaimsSet claims = new JWTClaimsSet.Builder()
-                .subject("test-user")
-                .issuer(JWT_ISSUER)
-                .issueTime(now)
-                .expirationTime(new Date(now.getTime() + 3600_000))
-                .build();
-        SignedJWT signedJwt = new SignedJWT(
-                new JWSHeader.Builder(JWSAlgorithm.RS256).keyID("test-key").build(), claims);
-        signedJwt.sign(signer);
-        return signedJwt.serialize();
     }
 
     @Test
     @Order(1)
-    void shouldReturn200ForSuccessfulUpstreamCall() throws Exception {
+    void shouldReturn200ForSuccessfulUpstreamCall() {
         wiremock.stubFor(get(urlPathMatching("/v4/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("OK")));
 
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + createJwt())
                 .exchange()
                 .expectStatus()
                 .isOk();
@@ -128,14 +74,12 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(2)
-    void shouldRetryOnServerError() throws Exception {
+    void shouldRetryOnServerError() {
         wiremock.stubFor(get(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(500)));
 
-        String jwt = createJwt();
         webClient
                 .get()
                 .uri("/api/v2/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .is5xxServerError();
@@ -146,14 +90,12 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(3)
-    void shouldNotRetryOn4xx() throws Exception {
+    void shouldNotRetryOn4xx() {
         wiremock.stubFor(get(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(400)));
 
-        String jwt = createJwt();
         webClient
                 .get()
                 .uri("/api/v2/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isBadRequest();
@@ -165,14 +107,12 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(4)
-    void shouldNotRetryOnPost() throws Exception {
+    void shouldNotRetryOnPost() {
         wiremock.stubFor(post(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(500)));
 
-        String jwt = createJwt();
         webClient
                 .post()
                 .uri("/api/v2/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .is5xxServerError();
@@ -184,14 +124,12 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(5)
-    void shouldReturn504OnTimeout() throws Exception {
+    void shouldReturn504OnTimeout() {
         wiremock.stubFor(get(urlPathMatching("/v3/.*")).willReturn(aResponse().withFixedDelay(3000)));
 
-        String jwt = createJwt();
         webClient
                 .get()
                 .uri("/api/v3/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
@@ -199,15 +137,13 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(6)
-    void shouldOpenCircuitBreakerAndRecover() throws Exception {
+    void shouldOpenCircuitBreakerAndRecover() {
         wiremock.stubFor(get(urlPathMatching("/v4/.*")).willReturn(aResponse().withStatus(500)));
 
-        String jwt = createJwt();
         for (int i = 0; i < 3; i++) {
             webClient
                     .get()
                     .uri("/api/v4/test")
-                    .header("Authorization", "Bearer " + jwt)
                     .exchange()
                     .expectStatus()
                     .is5xxServerError();
@@ -216,22 +152,19 @@ class GatewayResilienceIntegrationTest {
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
 
         wiremock.resetAll();
-        serveJwks();
         wiremock.stubFor(get(urlPathMatching("/v4/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("OK")));
 
-        await().atMost(5, SECONDS).until(upstreamOk(jwt));
+        await().atMost(5, SECONDS).until(upstreamOk());
 
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isOk();
@@ -239,7 +172,6 @@ class GatewayResilienceIntegrationTest {
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isOk();
@@ -247,22 +179,19 @@ class GatewayResilienceIntegrationTest {
 
     @Test
     @Order(7)
-    void shouldReturnFallbackResponseWithCorrelationId() throws Exception {
+    void shouldReturnFallbackResponseWithCorrelationId() {
         wiremock.stubFor(get(urlPathMatching("/v4/.*")).willReturn(aResponse().withStatus(500)));
 
-        String jwt = createJwt();
         for (int i = 0; i < 3; i++) {
             webClient
                     .get()
                     .uri("/api/v4/test")
-                    .header("Authorization", "Bearer " + jwt)
                     .exchange();
         }
 
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE)
@@ -279,28 +208,25 @@ class GatewayResilienceIntegrationTest {
                 .isNotEmpty();
 
         wiremock.resetAll();
-        serveJwks();
         wiremock.stubFor(get(urlPathMatching("/v4/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("OK")));
 
-        await().atMost(5, SECONDS).until(upstreamOk(jwt));
+        await().atMost(5, SECONDS).until(upstreamOk());
 
         webClient
                 .get()
                 .uri("/api/v4/test")
-                .header("Authorization", "Bearer " + jwt)
                 .exchange()
                 .expectStatus()
                 .isOk();
     }
 
-    private Callable<Boolean> upstreamOk(String jwt) {
+    private Callable<Boolean> upstreamOk() {
         return () -> {
             try {
                 webClient
                         .get()
                         .uri("/api/v4/test")
-                        .header("Authorization", "Bearer " + jwt)
                         .exchange()
                         .expectStatus()
                         .isOk();

@@ -27,7 +27,6 @@
         <opentelemetry.version>1.64.0</opentelemetry.version>
         <jacoco.version>0.8.12</jacoco.version>
         <spotless.version>2.43.0</spotless.version>
-        <jib.version>3.4.4</jib.version>
     </properties>
 
     <dependencyManagement>
@@ -108,18 +107,6 @@
             </exclusions>
         </dependency>
 
-        <!-- Security + JWT -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-            <exclusions>
-                <exclusion>
-                    <groupId>org.springframework.boot</groupId>
-                    <artifactId>spring-boot-starter-logging</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
         <!-- Circuit Breaker -->
         <dependency>
             <groupId>org.springframework.cloud</groupId>
@@ -165,11 +152,6 @@
             <groupId>org.wiremock</groupId>
             <artifactId>wiremock-standalone</artifactId>
             <version>${wiremock.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -275,36 +257,6 @@
                 </configuration>
             </plugin>
 
-            <plugin>
-                <groupId>com.google.cloud.tools</groupId>
-                <artifactId>jib-maven-plugin</artifactId>
-                <version>${jib.version}</version>
-                <configuration>
-                    <from>
-                        <image>eclipse-temurin:21-jre-alpine</image>
-                    </from>
-                    <to>
-                        <image>registry.example.com/api-gateway</image>
-                        <tags>
-                            <tag>${project.version}</tag>
-                            <tag>latest</tag>
-                        </tags>
-                    </to>
-                    <container>
-                        <jvmFlags>
-                            <jvmFlag>-Xms512m</jvmFlag>
-                            <jvmFlag>-Xmx512m</jvmFlag>
-                            <jvmFlag>-XX:+UseZGC</jvmFlag>
-                            <jvmFlag>-XX:MaxMetaspaceSize=128m</jvmFlag>
-                            <jvmFlag>-Djava.security.egd=file:/dev/./urandom</jvmFlag>
-                        </jvmFlags>
-                        <ports>
-                            <port>8080</port>
-                        </ports>
-                        <format>OCI</format>
-                    </container>
-                </configuration>
-            </plugin>
         </plugins>
     </build>
 

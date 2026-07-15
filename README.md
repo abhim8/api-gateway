@@ -44,7 +44,7 @@ Tests use `src/test/resources/application.yml` for automatic overrides.
 ./mvnw spring-boot:run
 ```
 
-The gateway starts on port 8080.
+The gateway starts on port 8000.
 
 ## Logging
 
@@ -92,6 +92,24 @@ Tests use `mockJwt()`, WireMock, and Awaitility.
 
 ## Docker
 
+Build and run with Docker:
+
 ```bash
-./mvnw jib:dockerBuild
+docker build -t api-gateway .
+docker run -p 8000:8000 api-gateway
+```
+
+Or with Docker Compose:
+
+```bash
+docker compose up --build
+```
+
+Set environment variables via `--env-file` or `-e`:
+
+```bash
+docker run -p 8000:8000 \
+  -e JWT_ISSUER_URI=https://your-auth-server.com \
+  -e JWKS_URI=https://your-auth-server.com/.well-known/jwks.json \
+  api-gateway
 ```

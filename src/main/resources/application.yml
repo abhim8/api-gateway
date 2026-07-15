@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 8000
   shutdown: graceful
   netty:
     connection-timeout: 5s
@@ -58,13 +58,6 @@ spring:
                       - BAD_GATEWAY
                       - SERVICE_UNAVAILABLE
                 - StripPrefix=1
-
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER_URI:https://auth.example.com}
-          jwk-set-uri: ${JWKS_URI:https://auth.example.com/.well-known/jwks.json}
 
 management:
   endpoints:
