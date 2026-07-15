@@ -3,10 +3,7 @@ package gateway.common.exception;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import gateway.filter.CorrelationIdGlobalFilter;
-import java.time.Instant;
-import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.webflux.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -19,11 +16,13 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.time.Instant;
+import java.util.Map;
+
 @Component
 @Order(-2)
+@Slf4j
 public class GlobalErrorHandler implements ErrorWebExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalErrorHandler.class);
 
     private final ObjectMapper objectMapper;
 

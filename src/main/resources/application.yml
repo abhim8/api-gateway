@@ -39,13 +39,15 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,gateway,configprops
       base-path: /actuator
   endpoint:
     health:
       probes:
         enabled: true
       show-details: never
+    gateway:
+      access: read-only
   metrics:
     tags:
       application: ${spring.application.name}

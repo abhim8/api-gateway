@@ -1,6 +1,7 @@
 package gateway.filter;
 
 import gateway.auth.AuthenticationProvider;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -10,6 +11,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
+@Slf4j
 public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String AUTH_RESULT_ATTRIBUTE = "authenticationResult";
@@ -22,15 +24,27 @@ public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+        String method = exchange.getRequest().getMethod().name();
+        String path = exchange.getRequest().getURI().getPath();
+        String providerName = authenticationProvider.getClass().getSimpleName();
+
+        log.debug("Incoming request: {} {}", method, path);
+        log.debug("Authentication started; provider: {}", providerName);
+
         return authenticationProvider.authenticate(exchange)
                 .flatMap(result -> {
                     if (!result.authenticated()) {
+                        log.warn("Authentication failed for {} {}; returning 401", method, path);
                         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
                         return exchange.getResponse().setComplete();
                     }
+                    log.info("Authentication successful - subject: {}, roles: {}",
+                            result.subject(),
+                            result.roles().isEmpty() ? "none" : result.roles());
                     exchange.getAttributes().put(AUTH_RESULT_ATTRIBUTE, result);
                     return chain.filter(exchange);
-                });
+                })
+                .doOnError(e -> log.error("Unexpected exception from AuthenticationProvider ({}):", providerName, e));
     }
 
     @Override
