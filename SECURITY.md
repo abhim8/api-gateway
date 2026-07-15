@@ -1,10 +1,16 @@
 # Security Policy
 
+## Supported Versions
+
+| Version | Supported |
+|---------|-----------|
+| 1.x     | Yes       |
+
 ## Reporting a Vulnerability
 
 Please **do not** report security vulnerabilities through public GitHub issues.
 
-Instead, send a private email to **abhilash@gmail.com** with:
+Send a private email to **abhilash@gmail.com** with:
 
 - A description of the vulnerability
 - Steps to reproduce (if known)

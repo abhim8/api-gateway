@@ -19,10 +19,6 @@ What would you like to happen? Be specific about the expected behaviour.
 
 Any alternative solutions or workarounds you've thought about.
 
-## Impact
-
-- **Service(s) affected:** notification-service / template-service / delivery-tracker
-
 ## Checklist
 
 - [ ] I have searched existing issues to avoid a duplicate

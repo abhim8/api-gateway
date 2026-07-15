@@ -1,67 +1,43 @@
 # Contributing
 
-Thanks for your interest in contributing to the Notification Platform.
+Thanks for your interest in contributing to the API Gateway.
 
 ## Project Setup
 
 ### Prerequisites
 
-- **JDK 23** (Temurin recommended)
-- **Apache Maven 3.9+**
-- **Docker Desktop** (for running Kafka, PostgreSQL, Redis locally)
-- **IntelliJ IDEA** (preferred, though any IDE works)
+- **Java 26** (Temurin recommended)
+- **Docker Desktop** (optional, for containerized runs)
 
-### Running Locally
-
-1.  Start infrastructure:
-
-    ```bash
-    docker compose up -d
-    ```
-
-    This starts Kafka, Zookeeper, and Kafka UI.
-
-2.  Start each service:
-
-    ```bash
-    # Terminal 1 - delivery-tracker (port 8003)
-    mvn spring-boot:run -pl delivery-tracker
-
-    # Terminal 2 - template-service (port 8002)
-    mvn spring-boot:run -pl template-service
-
-    # Terminal 3 - notification-service (port 8001)
-    mvn spring-boot:run -pl notification-service
-    ```
-
-### Building
+### Build and Test
 
 ```bash
-mvn clean compile
+./mvnw clean verify
 ```
 
-### Running Tests
+### Run Locally
 
 ```bash
-mvn clean verify
+./mvnw spring-boot:run
 ```
 
-To run a specific module:
+Starts on port 8000 with mock authentication (no external dependencies).
+
+### Docker
 
 ```bash
-mvn clean test -pl notification-service
+docker build -t api-gateway .
+docker run -p 8000:8000 -e GATEWAY_AUTH_MODE=mock api-gateway
 ```
 
 ## Branch Naming
 
-Use a consistent prefix followed by a short description:
+- `feat/` — new features
+- `fix/` — bug fixes
+- `chore/` — tooling, CI, or dependency updates
+- `docs/` — documentation-only changes
 
-- `feat/` - new features
-- `fix/` - bug fixes
-- `chore/` - tooling, CI, or dependency updates
-- `docs/` - documentation-only changes
-
-Examples: `feat/add-sms-retry`, `fix/kafka-ack-timeout`.
+Examples: `feat/add-rate-limiting`, `fix/circuit-breaker-timeout`.
 
 ## Commit Messages
 
@@ -75,28 +51,28 @@ Use [conventional commit](https://www.conventionalcommits.org/) style:
 
 Examples:
 
-- `feat(notification): add webhook HMAC signature verification`
-- `fix(delivery-tracker): handle negative page offset in getFailedAttempts`
-- `chore(ci): pin GitHub Actions runner versions`
+- `feat(auth): add remote authentication provider`
+- `fix(filter): handle null correlation ID header`
+- `chore(deps): bump spring-cloud-gateway to 5.1.2`
 
 Types: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`.
 
-Scopes: `notification-service`, `template-service`, `delivery-tracker`, `common`, `ci`.
+Scopes: `auth`, `filter`, `config`, `common`, `deps`, `docs`, `ci`.
 
-## Pull Request Workflow
+## Pull Request Process
 
-1.  Create a feature/fix branch from `main`.
-2.  Make your changes and commit them using conventional commits.
-3.  Run `mvn clean verify` locally before pushing.
-4.  Open a PR against `main` using the PR template.
-5.  Ensure the CI build passes.
-6.  Request a review from a maintainer.
+1. Create a feature/fix branch from `main`.
+2. Make your changes and commit using conventional commits.
+3. Run `./mvnw clean verify` locally before pushing.
+4. Open a PR against `main` using the pull request template.
+5. Request a review from a maintainer.
 
-## Coding Guidelines
+## Coding Standards
 
-- Follow the existing code style (package layout, naming conventions, record usage).
-- Keep hexagonal architecture boundaries: domain → application → adapter.
-- Use `@Slf4j` for logging; avoid `System.out`.
-- Validate inputs at the adapter layer (REST DTOs, Kafka payloads).
-- Add unit tests for new use cases and service logic.
+- **Reactive first**: `Mono<T>` / `Flux<T>` for all async code. No blocking calls.
+- **Immutability**: Use Java `record` for DTOs, `final` fields for everything else.
+- **No nulls**: Use `Mono.empty()` or `Optional` instead of null.
+- **Constructor injection**: No field injection (`@Autowired` on fields).
+- **Small classes**: One responsibility. Under 100 lines unless unavoidable.
+- **Configuration over code**: If Spring Cloud Gateway has a built-in filter factory for it, use it — don't write custom code.
 - Do **not** commit secrets or hardcoded credentials.

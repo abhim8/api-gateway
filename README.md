@@ -175,6 +175,8 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 ./mvnw clean verify
 ```
 
+Every push and pull request is automatically built via GitHub Actions — format check (`spotless:check`) followed by `clean verify`. This is build verification only; no artifacts are published or deployed.
+
 **Run**
 
 ```bash

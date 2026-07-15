@@ -18,12 +18,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 23 (Temurin)
+      - name: Set up Java 26 (Temurin)
         uses: actions/setup-java@v4
         with:
-          java-version: '23'
+          java-version: '26'
           distribution: temurin
           cache: maven
 
+      - name: Format check
+        run: ./mvnw spotless:check --batch-mode
+
       - name: Build and verify
-        run: mvn --batch-mode clean verify
+        run: ./mvnw clean verify --batch-mode

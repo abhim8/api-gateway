@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a problem to help us improve the platform
+about: Report a problem to help us improve the API Gateway
 title: "[BUG] "
 labels: bug
 assignees: ''
@@ -27,7 +27,6 @@ What actually happened (include logs, stack traces, or screenshots).
 
 ## Environment
 
-- **Service:** notification-service / template-service / delivery-tracker
 - **Deployment:** local / Docker / production
 - **Version / commit:** <!-- e.g. main@abc123 -->
 

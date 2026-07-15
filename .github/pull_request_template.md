@@ -1,7 +1,7 @@
 ## Summary
 
 <!--
-Briefly describe what this PR does, e.g. "Adds SMS channel support for marketing notifications".
+Briefly describe what this PR does, e.g. "Adds retry filter to the upstream route".
 -->
 
 ## Motivation
@@ -19,14 +19,19 @@ Explain why this change is needed. Link to any related issues or background cont
 
 - [ ] Unit tests added / updated
 - [ ] Integration tests pass
-- [ ] Manual verification (describe steps)
+- [ ] Manual verification performed
+
+## Breaking Changes
+
+<!--
+Does this change alter the request lifecycle, route definitions, authentication flow, or any existing behaviour?
+-->
 
 ## Checklist
 
 - [ ] Code follows the project's coding guidelines
-- [ ] No new compiler warnings or errors
-- [ ] Existing tests continue to pass (`mvn clean verify`)
-- [ ] Documentation updated (if applicable)
+- [ ] Build passes (`./mvnw clean verify`)
+- [ ] Documentation updated (README, if applicable)
 - [ ] Commit messages follow conventional commit style
 
 ## Additional Notes
