@@ -26,7 +26,10 @@ class CorrelationIdGlobalFilterTest {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+        StepVerifier.create(
+                filter.filter(exchange, chain)
+                        .then(exchange.getResponse().setComplete())
+        ).verifyComplete();
 
         String responseId = exchange.getResponse().getHeaders().getFirst(HeaderConstants.X_CORRELATION_ID);
         assertThat(responseId).isNotNull();
@@ -39,7 +42,10 @@ class CorrelationIdGlobalFilterTest {
         ServerWebExchange exchange = createExchange(existingId);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+        StepVerifier.create(
+                filter.filter(exchange, chain)
+                        .then(exchange.getResponse().setComplete())
+        ).verifyComplete();
 
         String responseId = exchange.getResponse().getHeaders().getFirst(HeaderConstants.X_CORRELATION_ID);
         assertThat(responseId).isEqualTo(existingId);
@@ -50,7 +56,10 @@ class CorrelationIdGlobalFilterTest {
         ServerWebExchange exchange = createExchange(null);
         CapturingChain chain = new CapturingChain();
 
-        StepVerifier.create(filter.filter(exchange, chain)).verifyComplete();
+        StepVerifier.create(
+                filter.filter(exchange, chain)
+                        .then(exchange.getResponse().setComplete())
+        ).verifyComplete();
 
         assertThat(exchange.getResponse().getHeaders().get(HeaderConstants.X_CORRELATION_ID))
                 .isNotNull()

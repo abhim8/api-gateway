@@ -36,16 +36,12 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                 .response(exchange.getResponse())
                 .build();
 
+        mutatedExchange.getResponse().beforeCommit(() -> {
+            mutatedExchange.getResponse().getHeaders().add(HeaderConstants.X_CORRELATION_ID, correlationId);
+            return Mono.empty();
+        });
+
         return chain.filter(mutatedExchange)
-                .then(Mono.defer(() -> {
-                    if (!mutatedExchange.getResponse().isCommitted()) {
-                        mutatedExchange.getResponse().getHeaders().add(HeaderConstants.X_CORRELATION_ID, correlationId);
-                    } else {
-                        log.debug("Response already committed, skipping correlation ID response header");
-                    }
-                    MDC.clear();
-                    return Mono.empty();
-                }))
                 .contextWrite(ctx -> {
                     MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                     if (traceId != null) {
@@ -56,8 +52,10 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                     }
                     return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                 })
-                .then()
-                .doFinally(_ -> log.debug("Leaving CorrelationIdGlobalFilter"));
+                .doFinally(signalType -> {
+                    MDC.clear();
+                    log.debug("Leaving CorrelationIdGlobalFilter");
+                });
     }
 
     @Override
