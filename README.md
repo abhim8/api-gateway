@@ -26,8 +26,9 @@ The API Gateway is the single entry point for all external traffic into the plat
 - Request routing via declarative YAML predicates
 - Pluggable authentication - mock mode for development, remote provider for production
 - Correlation ID propagation (`X-Correlation-ID`)
-- Rate limiting via Redis-backed token bucket (SCG `RequestRateLimiter`),
-- Circuit breaker, retry, and response timeout through SCG built-in filter factories
+- Rate limiting via Redis-backed token bucket (SCG `RequestRateLimiter`)
+- Circuit breaker with per-route configuration (Resilience4j via custom customizer)
+- Retry and response timeout through SCG built-in filter factories
 - Structured JSON logging (Log4j2 + JsonTemplateLayout)
 - Prometheus metrics via Micrometer (`/actuator/prometheus`)
 - Distributed tracing via OpenTelemetry (auto-instrumentation)
@@ -119,17 +120,19 @@ sequenceDiagram
 
 ```
 gateway/
-├── config/         # Bean selection - decides which AuthenticationProvider to wire up
+├── config/         # Bean selection, Redis configuration
 ├── auth/           # Authentication strategy: interface, result record, mock impl, remote impl
 ├── filter/         # Custom GlobalFilter implementations (auth, correlation ID)
-├── observability/  # Request timing filter and configuration
+├── observability/  # Request timing filter, response header configuration
+├── resiliency/
+│   └── circuitbreaker/  # Circuit breaker properties, configuration, factory customizer
 ├── web/            # Fallback controller - structured 503 when circuit breaker is open
 └── common/         # Shared error handler (JSON error body) and header constants
 ```
 
 Dependency flow: `config → auth`, `filter → auth + common`, `observability → filter + common`, `web → common`, `common → (none)`. No circular dependencies.
 
-**Custom classes: 14**. Everything else is YAML configuration or SCG built-in filters.
+**Custom classes: 19**. Everything else is YAML configuration or SCG built-in filters.
 
 ## Technology Stack
 
@@ -399,19 +402,82 @@ spring:
 
 The `key-resolver` and `rate-limiter` SpEL expressions reference the beans registered by `RateLimiterConfiguration`. No existing routes are affected — each route that needs rate limiting must explicitly add the filter.
 
-### RedisConfig Placeholder
-
-`gateway.config.RedisConfig` is a documentation-only class that reserves the `gateway.config` package for the future Redis configuration. It contains no bean definitions and has no impact on application startup. See its JavaDoc for the full list of beans the rate limiting infrastructure expects.
-
 ## Resilience
 
-All resilience patterns use SCG built-in filter factories. No custom circuit breaker or retry code.
+The circuit breaker infrastructure uses a custom `CircuitBreakerFactoryCustomizer` (package `gateway.resiliency.circuitbreaker`) to pre-configure the `Resilience4JCircuitBreakerFactory` with both default and per-route circuit breaker configurations. Per-route configs merge with defaults, so routes only need to specify overrides.
 
 | Pattern | Mechanism | Trigger | Response |
 |---------|-----------|---------|----------|
 | Circuit Breaker | `CircuitBreakerGatewayFilterFactory` + Resilience4j | Failure rate exceeds 50% in sliding window of 10 | 503 + `FallbackController` (structured JSON) |
 | Retry | `RetryGatewayFilterFactory` | Server error (5xx) on GET request | Transparent retry, max 3 attempts |
 | Timeout | `HttpClient.response-timeout` per-route or global default | No response within configured window | 504 |
+
+### Configuration
+
+Circuit breaker settings are defined under `gateway.circuit-breaker` with a `defaults` block and a `routes` map:
+
+```yaml
+gateway:
+  circuit-breaker:
+    enabled: true
+    defaults:
+      sliding-window-size: 10
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: 30s
+      permitted-number-of-calls-in-half-open-state: 3
+    routes:
+      template-service:
+        sliding-window-size: 5
+        failure-rate-threshold: 25
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `gateway.circuit-breaker.enabled` | `false` | Master switch for custom circuit breaker configuration |
+| `gateway.circuit-breaker.defaults.*` | see below | Default config applied to all routes |
+| `gateway.circuit-breaker.routes.<id>.*` | inherits from defaults | Per-route overrides |
+
+Default circuit breaker config values:
+
+| Property | Default |
+|----------|---------|
+| `sliding-window-size` | `10` |
+| `minimum-number-of-calls` | `5` |
+| `failure-rate-threshold` | `50` |
+| `wait-duration-in-open-state` | `30s` |
+| `permitted-number-of-calls-in-half-open-state` | `3` |
+| `automatic-transition-from-open-to-half-open-enabled` | `true` |
+| `slow-call-rate-threshold` | `100` |
+| `slow-call-duration-threshold` | `60s` |
+
+The `CircuitBreakerFactoryCustomizer` implements `Consumer<Resilience4JCircuitBreakerFactory>` and is registered by `CircuitBreakerConfiguration` when `gateway.circuit-breaker.enabled=true`. It configures the default `Resilience4JCircuitBreakerFactory` with the properties from `CircuitBreakerProperties`.
+
+### Per-Route Configuration
+
+Routes can override individual defaults. Values not explicitly set inherit from the `defaults` block. For example, with the config above, `template-service` would use:
+- `sliding-window-size = 5` (override)
+- `failure-rate-threshold = 25` (override)
+- `wait-duration-in-open-state = 30s` (inherited)
+
+To use the custom configuration on a route, reference the standard SCG `CircuitBreaker` filter factory:
+
+```yaml
+spring:
+  cloud:
+    gateway:
+      routes:
+        - id: template-service
+          uri: http://upstream:8080
+          predicates:
+            - Path=/api/v1/templates/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: template-service
+                fallbackUri: forward:/fallback
+```
+
+The `name` in the filter args must match a key in `gateway.circuit-breaker.routes` for the per-route configuration to take effect.
 
 The `FallbackController` returns a JSON body with correlation ID, route name, and timestamp when the circuit breaker is open.
 

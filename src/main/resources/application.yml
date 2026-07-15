@@ -96,6 +96,8 @@ gateway:
     requested-tokens: 1
     deny-empty-key: true
     empty-key-status: 401
+  circuit-breaker:
+    enabled: false
 
 logging:
   level:
