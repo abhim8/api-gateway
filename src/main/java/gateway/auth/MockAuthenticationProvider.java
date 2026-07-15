@@ -9,7 +9,6 @@ public class MockAuthenticationProvider implements AuthenticationProvider {
 
     @Override
     public Mono<AuthenticationResult> authenticate(ServerWebExchange exchange) {
-        System.out.println("MockAuthenticationProvider.authenticate()");
         log.debug("Mock provider invoked");
         log.info("Mock authentication successful - subject: mock-user");
         return Mono.just(AuthenticationResult.authenticated("mock-user"));

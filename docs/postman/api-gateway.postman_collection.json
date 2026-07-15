@@ -13,8 +13,8 @@
   ],
   "item": [
     {
-      "name": "Health",
-      "description": "Gateway health probes and metrics endpoints.",
+      "name": "Actuator",
+      "description": "Spring Boot Actuator endpoints for monitoring and managing the gateway application.",
       "item": [
         {
           "name": "Health Check",
@@ -25,35 +25,22 @@
               "raw": "{{baseUrl}}/actuator/health",
               "host": ["{{baseUrl}}"],
               "path": ["actuator", "health"]
-            },
-            "description": "Overall health status. Returns {\"status\": \"UP\"} when the gateway is healthy."
-          }
+            }
+          },
+          "description": "Returns overall health status of the gateway. Used by load balancers and orchestrators to determine if the instance is healthy."
         },
         {
-          "name": "Liveness Probe",
+          "name": "Application Info",
           "request": {
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{baseUrl}}/actuator/health/liveness",
+              "raw": "{{baseUrl}}/actuator/info",
               "host": ["{{baseUrl}}"],
-              "path": ["actuator", "health", "liveness"]
-            },
-            "description": "Kubernetes liveness probe. Indicates whether the gateway process is alive."
-          }
-        },
-        {
-          "name": "Readiness Probe",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/actuator/health/readiness",
-              "host": ["{{baseUrl}}"],
-              "path": ["actuator", "health", "readiness"]
-            },
-            "description": "Kubernetes readiness probe. Indicates whether the gateway is ready to accept traffic."
-          }
+              "path": ["actuator", "info"]
+            }
+          },
+          "description": "Displays arbitrary application information from the InfoContributor beans. Useful for build metadata, Git info, and custom properties."
         },
         {
           "name": "Prometheus Metrics",
@@ -64,9 +51,35 @@
               "raw": "{{baseUrl}}/actuator/prometheus",
               "host": ["{{baseUrl}}"],
               "path": ["actuator", "prometheus"]
-            },
-            "description": "Prometheus metrics scrape endpoint. Returns metrics in text format."
-          }
+            }
+          },
+          "description": "Prometheus scrape endpoint exposing gateway metrics (request count, latency, circuit breaker state, etc.) in Prometheus text format."
+        },
+        {
+          "name": "Gateway Routes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/gateway/routes",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "gateway", "routes"]
+            }
+          },
+          "description": "Lists all routes registered in the Spring Cloud Gateway. Each entry shows route ID, predicate, filters, and target URI. Useful for verifying route configuration at runtime."
+        },
+        {
+          "name": "Configuration Properties",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/configprops",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "configprops"]
+            }
+          },
+          "description": "Displays a collated view of all @ConfigurationProperties beans. Useful for debugging property binding and verifying runtime configuration values."
         }
       ]
     },
