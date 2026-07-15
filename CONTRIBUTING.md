@@ -27,7 +27,7 @@ Starts on port 8000 with mock authentication (no external dependencies).
 
 ```bash
 docker build -t api-gateway .
-docker run -p 8000:8000 -e GATEWAY_AUTH_MODE=mock api-gateway
+docker run -p 8000:8000 -e GATEWAY_AUTHENTICATION_PROVIDER=mock api-gateway
 ```
 
 ## Branch Naming

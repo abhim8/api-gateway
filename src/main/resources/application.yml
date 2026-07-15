@@ -14,50 +14,26 @@ spring:
 
   cloud:
     gateway:
-      server:
-        webflux:
-          globalcors:
-            cors-configurations:
-              '[/**]':
-                allowedOrigins: ${GATEWAY_CORS_ORIGINS:https://app.example.com}
-                allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
-                allowedHeaders: Authorization,Content-Type,X-Correlation-ID
-                allowCredentials: true
-                maxAge: 1800
-          httpclient:
-            response-timeout: 5s
-            connect-timeout: 3000
-            pool:
-              type: ELASTIC
-              max-connections: 500
-              max-idle-time: 60s
-          routes:
-            - id: example
-              uri: http://example-service:8080
-              predicates:
-                - Path=/api/v1/example/**
-              filters:
-                - name: CircuitBreaker
-                  args:
-                    name: exampleCB
-                    fallbackUri: forward:/fallback/example
-                    statusCodes:
-                      - "500"
-                      - "502"
-                      - "503"
-                      - "504"
-                - name: Retry
-                  args:
-                    retries: 3
-                    series:
-                      - SERVER_ERROR
-                    methods:
-                      - GET
-                    statuses:
-                      - INTERNAL_SERVER_ERROR
-                      - BAD_GATEWAY
-                      - SERVICE_UNAVAILABLE
-                - StripPrefix=1
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${GATEWAY_CORS_ORIGINS:https://app.example.com}
+            allowedMethods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+            allowedHeaders: Authorization,Content-Type,X-Correlation-ID
+            allowCredentials: true
+            maxAge: 1800
+      httpclient:
+        response-timeout: 5s
+        connect-timeout: 3000
+        pool:
+          type: ELASTIC
+          max-connections: 500
+          max-idle-time: 60s
+      routes:
+        - id: template-service
+          uri: http://localhost:8002
+          predicates:
+            - Path=/api/v1/templates
 
 management:
   endpoints:
@@ -84,9 +60,7 @@ resilience4j:
         waitDurationInOpenState: 30s
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
-    instances:
-      exampleCB:
-        baseConfig: default
+#    instances: {}
 
 gateway:
   authentication:
@@ -95,6 +69,8 @@ gateway:
 logging:
   level:
     root: ${DEFAULT_LOG_LEVEL:INFO}
+    gateway: DEBUG
+    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: WARN
 
 otel:
   service:

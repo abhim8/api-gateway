@@ -1,0 +1,129 @@
+{
+  "info": {
+    "name": "API Gateway",
+    "description": "Requests against the API Gateway. Import with baseUrl variable set to http://localhost:8000.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "templateServiceBaseUrl",
+      "value": "http://localhost:8002",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "description": "Gateway health probes and metrics endpoints.",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health"]
+            },
+            "description": "Overall health status. Returns {\"status\": \"UP\"} when the gateway is healthy."
+          }
+        },
+        {
+          "name": "Liveness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/liveness",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health", "liveness"]
+            },
+            "description": "Kubernetes liveness probe. Indicates whether the gateway process is alive."
+          }
+        },
+        {
+          "name": "Readiness Probe",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/health/readiness",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "health", "readiness"]
+            },
+            "description": "Kubernetes readiness probe. Indicates whether the gateway is ready to accept traffic."
+          }
+        },
+        {
+          "name": "Prometheus Metrics",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/actuator/prometheus",
+              "host": ["{{baseUrl}}"],
+              "path": ["actuator", "prometheus"]
+            },
+            "description": "Prometheus metrics scrape endpoint. Returns metrics in text format."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "description": "Future Auth Platform integration. Currently authentication is in mock mode — all requests pass through automatically.",
+      "item": [
+        {
+          "name": "Auth Platform Validation (future)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer <token>",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/validate",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "validate"]
+            }
+          },
+          "description": "Placeholder for the future Auth Platform integration. Will validate tokens against the Auth Platform. Not yet implemented."
+        }
+      ]
+    },
+    {
+      "name": "Gateway",
+      "description": "Requests proxied by the API Gateway to downstream services. Each request maps to a configured Spring Cloud Gateway route.",
+      "item": [
+        {
+          "name": "Templates Service",
+          "description": "Routes through the API Gateway to the templates service at localhost:8002.",
+          "item": [
+            {
+              "name": "List Templates",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{templateServiceBaseUrl}}/api/v1/templates",
+                  "host": ["{{templateServiceBaseUrl}}"],
+                  "path": ["api", "v1", "templates"]
+                }
+              },
+              "description": "Routes through API Gateway to: http://localhost:8002/api/v1/templates"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

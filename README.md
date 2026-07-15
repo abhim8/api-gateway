@@ -160,6 +160,7 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | `spring.cloud.gateway.httpclient.response-timeout` | `5s` | Global upstream timeout |
 | `spring.codec.max-in-memory-size` | `256KB` | Request body size limit |
 | `DEFAULT_LOG_LEVEL` | `INFO` | Root log level |
+| `GATEWAY_LOG_LEVEL` | `DEBUG` | `gateway.*` package log level |
 | `OTEL_TRACES_EXPORTER` | `otlp` | OpenTelemetry trace exporter |
 
 ## Running Locally
@@ -189,7 +190,7 @@ The gateway starts on port 8000 with mock authentication (no Auth Platform neede
 
 ```bash
 docker build -t api-gateway .
-docker run -p 8000:8000 -e GATEWAY_AUTH_MODE=mock api-gateway
+docker run -p 8000:8000 -e GATEWAY_AUTHENTICATION_PROVIDER=mock api-gateway
 ```
 
 **Docker Compose**
@@ -277,17 +278,53 @@ Multi-stage build:
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `GATEWAY_AUTH_MODE` | No | `mock` | Select auth provider |
+| `GATEWAY_AUTHENTICATION_PROVIDER` | No | `mock` | Select auth provider |
 | `GATEWAY_CORS_ORIGINS` | No | `https://app.example.com` | CORS allowed origins |
 | `DEFAULT_LOG_LEVEL` | No | `INFO` | Root logger level |
 | `OTEL_TRACES_EXPORTER` | No | `otlp` | OpenTelemetry exporter |
 | `OTEL_SERVICE_NAME` | Recommended | — | Tracer service name |
 | `JAVA_TOOL_OPTIONS` | No | — | JVM flags (heap, GC, agent) |
 
+### Logging
+
+Log4j 2.x writes structured JSON to stdout via `JsonTemplateLayout`. Level control via environment variables:
+
+| Variable | Scope | Default |
+|----------|-------|---------|
+| `DEFAULT_LOG_LEVEL` | Root logger | `INFO` |
+| `GATEWAY_LOG_LEVEL` | `gateway.*` package | `DEBUG` |
+
 ### Graceful Shutdown
 
 - `server.shutdown=graceful` — drains in-flight requests before shutting down
 - `spring.lifecycle.timeout-per-shutdown-phase=30s` — maximum drain window
+
+## Gateway Routes
+
+Routes are declared in `application.yml` and proxied by Spring Cloud Gateway.
+
+| Method | Gateway Endpoint | Downstream Service | Routed URI | Description |
+|--------|-----------------|-------------------|------------|-------------|
+| GET | `/api/v1/templates` | templates-service | `http://localhost:8002/api/v1/templates` | Proxies to the templates service |
+
+## Postman Collection
+
+A Postman collection is available at `docs/postman/api-gateway.postman_collection.json`.
+
+**Import**
+
+1. Open Postman
+2. File → Import → Upload Files → select the collection file
+3. The `baseUrl` variable defaults to `http://localhost:8000`
+
+**Folders**
+
+| Folder | Purpose |
+|--------|---------|
+| Health | Gateway health probes and metrics endpoints |
+| Authentication | Placeholder for future Auth Platform integration |
+| Gateway | Requests proxied to downstream services through configured routes |
+| Fallback | Local fallback endpoints invoked when a circuit breaker is open |
 
 ## Current Limitations
 

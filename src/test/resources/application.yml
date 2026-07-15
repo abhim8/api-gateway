@@ -103,3 +103,4 @@ logging:
   level:
     root: INFO
     gateway: DEBUG
+    org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: WARN
