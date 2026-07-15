@@ -64,12 +64,7 @@ class GatewayResilienceIntegrationTest {
         wiremock.stubFor(get(urlPathMatching("/v4/.*"))
                 .willReturn(aResponse().withStatus(200).withBody("OK")));
 
-        webClient
-                .get()
-                .uri("/api/v4/test")
-                .exchange()
-                .expectStatus()
-                .isOk();
+        webClient.get().uri("/api/v4/test").exchange().expectStatus().isOk();
     }
 
     @Test
@@ -77,12 +72,7 @@ class GatewayResilienceIntegrationTest {
     void shouldRetryOnServerError() {
         wiremock.stubFor(get(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(500)));
 
-        webClient
-                .get()
-                .uri("/api/v2/test")
-                .exchange()
-                .expectStatus()
-                .is5xxServerError();
+        webClient.get().uri("/api/v2/test").exchange().expectStatus().is5xxServerError();
 
         int callCount = wiremock.getAllServeEvents().size();
         assert callCount >= 2 : "Expected at least 2 calls due to retry but got " + callCount;
@@ -93,12 +83,7 @@ class GatewayResilienceIntegrationTest {
     void shouldNotRetryOn4xx() {
         wiremock.stubFor(get(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(400)));
 
-        webClient
-                .get()
-                .uri("/api/v2/test")
-                .exchange()
-                .expectStatus()
-                .isBadRequest();
+        webClient.get().uri("/api/v2/test").exchange().expectStatus().isBadRequest();
 
         assert wiremock.getAllServeEvents().size() == 1
                 : "Expected exactly 1 call but got "
@@ -110,12 +95,7 @@ class GatewayResilienceIntegrationTest {
     void shouldNotRetryOnPost() {
         wiremock.stubFor(post(urlPathMatching("/v2/.*")).willReturn(aResponse().withStatus(500)));
 
-        webClient
-                .post()
-                .uri("/api/v2/test")
-                .exchange()
-                .expectStatus()
-                .is5xxServerError();
+        webClient.post().uri("/api/v2/test").exchange().expectStatus().is5xxServerError();
 
         assert wiremock.getAllServeEvents().size() == 1
                 : "Expected exactly 1 POST call but got "
@@ -127,12 +107,7 @@ class GatewayResilienceIntegrationTest {
     void shouldReturn504OnTimeout() {
         wiremock.stubFor(get(urlPathMatching("/v3/.*")).willReturn(aResponse().withFixedDelay(3000)));
 
-        webClient
-                .get()
-                .uri("/api/v3/test")
-                .exchange()
-                .expectStatus()
-                .isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
+        webClient.get().uri("/api/v3/test").exchange().expectStatus().isEqualTo(HttpStatus.GATEWAY_TIMEOUT);
     }
 
     @Test
@@ -141,20 +116,10 @@ class GatewayResilienceIntegrationTest {
         wiremock.stubFor(get(urlPathMatching("/v4/.*")).willReturn(aResponse().withStatus(500)));
 
         for (int i = 0; i < 3; i++) {
-            webClient
-                    .get()
-                    .uri("/api/v4/test")
-                    .exchange()
-                    .expectStatus()
-                    .is5xxServerError();
+            webClient.get().uri("/api/v4/test").exchange().expectStatus().is5xxServerError();
         }
 
-        webClient
-                .get()
-                .uri("/api/v4/test")
-                .exchange()
-                .expectStatus()
-                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+        webClient.get().uri("/api/v4/test").exchange().expectStatus().isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
 
         wiremock.resetAll();
         wiremock.stubFor(get(urlPathMatching("/v4/.*"))
@@ -162,19 +127,9 @@ class GatewayResilienceIntegrationTest {
 
         await().atMost(5, SECONDS).until(upstreamOk());
 
-        webClient
-                .get()
-                .uri("/api/v4/test")
-                .exchange()
-                .expectStatus()
-                .isOk();
+        webClient.get().uri("/api/v4/test").exchange().expectStatus().isOk();
 
-        webClient
-                .get()
-                .uri("/api/v4/test")
-                .exchange()
-                .expectStatus()
-                .isOk();
+        webClient.get().uri("/api/v4/test").exchange().expectStatus().isOk();
     }
 
     @Test
@@ -183,10 +138,7 @@ class GatewayResilienceIntegrationTest {
         wiremock.stubFor(get(urlPathMatching("/v4/.*")).willReturn(aResponse().withStatus(500)));
 
         for (int i = 0; i < 3; i++) {
-            webClient
-                    .get()
-                    .uri("/api/v4/test")
-                    .exchange();
+            webClient.get().uri("/api/v4/test").exchange();
         }
 
         webClient
@@ -213,23 +165,13 @@ class GatewayResilienceIntegrationTest {
 
         await().atMost(5, SECONDS).until(upstreamOk());
 
-        webClient
-                .get()
-                .uri("/api/v4/test")
-                .exchange()
-                .expectStatus()
-                .isOk();
+        webClient.get().uri("/api/v4/test").exchange().expectStatus().isOk();
     }
 
     private Callable<Boolean> upstreamOk() {
         return () -> {
             try {
-                webClient
-                        .get()
-                        .uri("/api/v4/test")
-                        .exchange()
-                        .expectStatus()
-                        .isOk();
+                webClient.get().uri("/api/v4/test").exchange().expectStatus().isOk();
                 return true;
             } catch (Throwable e) {
                 return false;

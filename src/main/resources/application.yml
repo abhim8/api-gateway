@@ -88,6 +88,10 @@ resilience4j:
       exampleCB:
         baseConfig: default
 
+gateway:
+  auth:
+    mode: mock
+
 logging:
   level:
     root: ${DEFAULT_LOG_LEVEL:INFO}

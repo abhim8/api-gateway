@@ -4,7 +4,7 @@ Spring Cloud Gateway 5.x front-door proxy for a microservices platform.
 
 ## Features
 
-- **Authentication**: OAuth2 Resource Server with JWT bearer tokens (via JWKS)
+- **Authentication**: Delegated to a dedicated Auth Platform via `AuthenticationProvider`
 - **Correlation IDs**: `X-Correlation-ID` header propagated across all requests
 - **Resilience**: Circuit Breaker, Retry, Response Timeout, Fallback
 - **Structured JSON Logging**: Log4j2 with JsonTemplateLayout (Loki/ELK/Datadog friendly)
@@ -15,13 +15,27 @@ Spring Cloud Gateway 5.x front-door proxy for a microservices platform.
 
 ## Authentication
 
-All routes under `/api/v1/**` require a valid JWT. Actuator endpoints (except `/health` and `/info`) require the `ROLE_ADMIN` authority. Public endpoints: `/actuator/health/**`, `/actuator/info`, `/fallback/**`.
+The API Gateway **delegates** authentication to a dedicated Auth Platform. It does not validate JWTs, manage tokens, or implement any authentication logic itself.
 
-Configure issuer and JWKS URI via environment variables:
+Two authentication modes are available:
+
+| Mode | Description |
+|------|-------------|
+| `mock` (default) | `MockAuthenticationProvider` — always returns `authenticated = true`. Suitable for local development. |
+| `remote` | `RemoteAuthenticationProvider` — reserved for future Auth Platform integration. Currently throws `UnsupportedOperationException`. |
+
+Select the mode via `application.yml`:
+
+```yaml
+gateway:
+  auth:
+    mode: mock
+```
+
+Or override with an environment variable:
 
 ```bash
-export JWT_ISSUER_URI=https://your-auth-server.com
-export JWKS_URI=https://your-auth-server.com/.well-known/jwks.json
+export GATEWAY_AUTH_MODE=remote
 ```
 
 ## Configuration Strategy
@@ -31,8 +45,7 @@ A single `application.yml` works for all environments (12-Factor). Override via 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DEFAULT_LOG_LEVEL` | `INFO` | Root log level |
-| `JWT_ISSUER_URI` | `https://auth.example.com` | JWT issuer |
-| `JWKS_URI` | `https://auth.example.com/.well-known/jwks.json` | JWKS endpoint |
+| `GATEWAY_AUTH_MODE` | `mock` | Auth mode (`mock` or `remote`) |
 | `GATEWAY_CORS_ORIGINS` | `https://app.example.com` | Allowed CORS origins |
 | `OTEL_TRACES_EXPORTER` | `otlp` | OpenTelemetry trace exporter |
 
@@ -54,13 +67,13 @@ Structured JSON on stdout. Format defined in `log-layout.json` (Log4j2 JsonTempl
 
 ## Observability Endpoints
 
-| Endpoint | Purpose | Auth |
-|----------|---------|------|
+| Endpoint | Purpose | Access |
+|----------|---------|--------|
 | `/actuator/health` | Overall health status | Public |
 | `/actuator/health/liveness` | Liveness probe | Public |
 | `/actuator/health/readiness` | Readiness probe | Public |
 | `/actuator/info` | Build info | Public |
-| `/actuator/prometheus` | Prometheus metrics | `ROLE_ADMIN` |
+| `/actuator/prometheus` | Prometheus metrics | Public (no auth enforcement) |
 
 ## Error Responses
 
@@ -81,8 +94,6 @@ All HTTP errors return consistent JSON:
 ```bash
 ./mvnw clean verify
 ```
-
-Tests use `mockJwt()`, WireMock, and Awaitility.
 
 ## Build
 
@@ -109,7 +120,6 @@ Set environment variables via `--env-file` or `-e`:
 
 ```bash
 docker run -p 8000:8000 \
-  -e JWT_ISSUER_URI=https://your-auth-server.com \
-  -e JWKS_URI=https://your-auth-server.com/.well-known/jwks.json \
+  -e GATEWAY_AUTH_MODE=mock \
   api-gateway
 ```
