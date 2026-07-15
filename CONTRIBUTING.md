@@ -32,10 +32,10 @@ docker run -p 8000:8000 -e GATEWAY_AUTHENTICATION_PROVIDER=mock api-gateway
 
 ## Branch Naming
 
-- `feat/` — new features
-- `fix/` — bug fixes
-- `chore/` — tooling, CI, or dependency updates
-- `docs/` — documentation-only changes
+- `feat/` - new features
+- `fix/` - bug fixes
+- `chore/` - tooling, CI, or dependency updates
+- `docs/` - documentation-only changes
 
 Examples: `feat/add-rate-limiting`, `fix/circuit-breaker-timeout`.
 
@@ -74,5 +74,5 @@ Scopes: `auth`, `filter`, `config`, `common`, `deps`, `docs`, `ci`.
 - **No nulls**: Use `Mono.empty()` or `Optional` instead of null.
 - **Constructor injection**: No field injection (`@Autowired` on fields).
 - **Small classes**: One responsibility. Under 100 lines unless unavoidable.
-- **Configuration over code**: If Spring Cloud Gateway has a built-in filter factory for it, use it — don't write custom code.
+- **Configuration over code**: If Spring Cloud Gateway has a built-in filter factory for it, use it - don't write custom code.
 - Do **not** commit secrets or hardcoded credentials.

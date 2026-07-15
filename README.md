@@ -1,6 +1,6 @@
 # API Gateway
 
-Stateless, reactive front-door proxy for a microservices platform. Built with Spring Cloud Gateway 5.x on Java 26 — WebFlux, Netty, Reactor.
+Stateless, reactive front-door proxy for a microservices platform. Built with Spring Cloud Gateway 5.x on Java 26 - WebFlux, Netty, Reactor.
 
 ## Project Overview
 
@@ -17,15 +17,15 @@ The API Gateway is the single entry point for all external traffic into the plat
 
 **Deliberately out of scope**
 
-- Authorization (JWT, OAuth2, API keys) — authentication is pluggable but no authorization layer is implemented
-- TLS termination — delegated to the Kubernetes ingress
-- Rate limiting — requires Redis, not currently integrated
-- Dynamic route management — requires Redis, not currently integrated
+- Authorization (JWT, OAuth2, API keys) - authentication is pluggable but no authorization layer is implemented
+- TLS termination - delegated to the Kubernetes ingress
+- Rate limiting - requires Redis, not currently integrated
+- Dynamic route management - requires Redis, not currently integrated
 
 ## Key Features
 
 - Request routing via declarative YAML predicates
-- Pluggable authentication — mock mode for development, remote provider for production
+- Pluggable authentication - mock mode for development, remote provider for production
 - Correlation ID propagation (`X-Correlation-ID`)
 - Circuit breaker, retry, and response timeout through SCG built-in filter factories
 - Structured JSON logging (Log4j2 + JsonTemplateLayout)
@@ -58,7 +58,7 @@ graph TB
     Gateway -.-> Logging
 ```
 
-The gateway is stateless — every pod is identical. No Redis, no database, no local state. Authentication is delegated to a pluggable `AuthenticationProvider` abstraction with two implementations: `MockAuthenticationProvider` (always authenticates) and `RemoteAuthenticationProvider` (delegates to an external service).
+The gateway is stateless - every pod is identical. No Redis, no database, no local state. Authentication is delegated to a pluggable `AuthenticationProvider` abstraction with two implementations: `MockAuthenticationProvider` (always authenticates) and `RemoteAuthenticationProvider` (delegates to an external service).
 
 ## Request Lifecycle
 
@@ -107,22 +107,22 @@ sequenceDiagram
 |-------|-----------|-------|
 | 1 | Netty HTTP parser | 400 |
 | 2 | `CorsGlobalFilter` | 403 |
-| 3 | `CorrelationIdGlobalFilter` | — |
+| 3 | `CorrelationIdGlobalFilter` | - |
 | 4 | `AuthenticationGlobalFilter` → `AuthenticationProvider` | 401 / 500 |
 | 5 | SCG `RouteLocator` | 404 |
 | 6 | SCG `RetryGatewayFilterFactory` | 502 |
 | 7 | SCG `CircuitBreakerGatewayFilterFactory` + fallback | 503 |
 | 8 | Netty `HttpClient` with response-timeout | 504 |
-| 9 | Post-filters + `GlobalErrorHandler` | — |
+| 9 | Post-filters + `GlobalErrorHandler` | - |
 
 ## Package Structure
 
 ```
 gateway/
-├── config/   # Bean selection — decides which AuthenticationProvider to wire up
+├── config/   # Bean selection - decides which AuthenticationProvider to wire up
 ├── auth/     # Authentication strategy: interface, result record, mock impl, remote impl
 ├── filter/   # Custom GlobalFilter implementations (auth, correlation ID)
-├── web/      # Fallback controller — structured 503 when circuit breaker is open
+├── web/      # Fallback controller - structured 503 when circuit breaker is open
 └── common/   # Shared error handler (JSON error body) and header constants
 ```
 
@@ -147,7 +147,7 @@ Dependency flow: `config → auth`, `filter → auth + common`, `web → common`
 
 ## Configuration
 
-Configuration follows Spring Boot's standard precedence: environment variables override `application.yml`. No custom `@ConfigurationProperties` classes — everything uses native Spring Boot keys.
+Configuration follows Spring Boot's standard precedence: environment variables override `application.yml`. No custom `@ConfigurationProperties` classes - everything uses native Spring Boot keys.
 
 | Key / Env Variable | Default | Description |
 |--------------------|---------|-------------|
@@ -174,7 +174,7 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 ./mvnw clean verify
 ```
 
-Every push and pull request is automatically built via GitHub Actions — format check (`spotless:check`) followed by `clean verify`. This is build verification only; no artifacts are published or deployed.
+Every push and pull request is automatically built via GitHub Actions - format check (`spotless:check`) followed by `clean verify`. This is build verification only; no artifacts are published or deployed.
 
 **Run**
 
@@ -205,7 +205,7 @@ Downstream service URIs (e.g. `TEMPLATE_SERVICE_URL`) must resolve from inside t
 |---|---|---|
 | Host machine (Gateway in Docker) | `http://host.docker.internal:8002` | Gateway runs in a container, downstream service runs directly on the host (Docker Desktop for Mac/Windows). `host.docker.internal` resolves to the host from within the container. |
 | Same Docker network | `http://template-service:8002` | Both the Gateway and the downstream service run as Docker containers on the same user-defined bridge network. Compose service names resolve via built-in DNS. |
-| Direct execution | `http://localhost:8002` | Gateway runs via `mvn spring-boot:run` (no container). `localhost` refers to the same machine — the downstream service is accessible directly. |
+| Direct execution | `http://localhost:8002` | Gateway runs via `mvn spring-boot:run` (no container). `localhost` refers to the same machine - the downstream service is accessible directly. |
 
 The `docker-compose.yml` sets `TEMPLATE_SERVICE_URL=http://host.docker.internal:8002` by default. Override it when running both services in Docker:
 
@@ -234,7 +234,7 @@ graph LR
 
 | Mode | Provider | Description |
 |------|----------|-------------|
-| `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O — no HTTP, no JWT, no crypto. Suitable for local development and testing. |
+| `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O - no HTTP, no JWT, no crypto. Suitable for local development and testing. |
 | `remote` | `RemoteAuthenticationProvider` | Delegates authentication to an external authentication service. This repository provides the integration point only; the external service is implementation-specific. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
 
 Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`. Set to `mock` (default) for local development or `remote` for deployments with an external authentication service.
@@ -297,8 +297,8 @@ Multi-stage build:
 | `TEMPLATE_SERVICE_URL` | No | `http://localhost:8002` | Downstream URI for the template service |
 | `DEFAULT_LOG_LEVEL` | No | `INFO` | Root logger level |
 | `OTEL_TRACES_EXPORTER` | No | `otlp` | OpenTelemetry exporter |
-| `OTEL_SERVICE_NAME` | No | — | Tracer service name |
-| `JAVA_TOOL_OPTIONS` | No | — | JVM flags (heap, GC, agent) |
+| `OTEL_SERVICE_NAME` | No | - | Tracer service name |
+| `JAVA_TOOL_OPTIONS` | No | - | JVM flags (heap, GC, agent) |
 
 ### Logging
 
@@ -311,8 +311,8 @@ Log4j 2.x writes structured JSON to stdout via `JsonTemplateLayout`. Level contr
 
 ### Graceful Shutdown
 
-- `server.shutdown=graceful` — drains in-flight requests before shutting down
-- `spring.lifecycle.timeout-per-shutdown-phase=30s` — maximum drain window
+- `server.shutdown=graceful` - drains in-flight requests before shutting down
+- `spring.lifecycle.timeout-per-shutdown-phase=30s` - maximum drain window
 
 ## Gateway Routes
 

@@ -85,7 +85,7 @@
     },
     {
       "name": "Authentication",
-      "description": "Future Auth Platform integration. Currently authentication is in mock mode — all requests pass through automatically.",
+      "description": "Future Auth Platform integration. Currently authentication is in mock mode - all requests pass through automatically.",
       "item": [
         {
           "name": "Auth Platform Validation (future)",
