@@ -1,8 +1,8 @@
 package gateway.auth;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
-
 import org.junit.jupiter.api.Test;
+
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class RemoteAuthenticationProviderTest {
 

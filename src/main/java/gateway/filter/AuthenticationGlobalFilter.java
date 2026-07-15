@@ -1,6 +1,7 @@
 package gateway.filter;
 
 import gateway.auth.AuthenticationProvider;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
@@ -13,15 +14,12 @@ import reactor.core.publisher.Mono;
 
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String AUTH_RESULT_ATTRIBUTE = "authenticationResult";
 
     private final AuthenticationProvider authenticationProvider;
-
-    public AuthenticationGlobalFilter(AuthenticationProvider authenticationProvider) {
-        this.authenticationProvider = authenticationProvider;
-    }
 
     @Override
     public @NonNull Mono<Void> filter(ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {

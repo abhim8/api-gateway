@@ -1,7 +1,5 @@
 package gateway.filter;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
 import gateway.common.util.HeaderConstants;
 import gateway.observability.ResponseHeadersProperties;
 import io.opentelemetry.api.trace.Span;
@@ -9,8 +7,6 @@ import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;
 import io.opentelemetry.api.trace.TraceState;
 import io.opentelemetry.context.Scope;
-import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -18,6 +14,11 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 class CorrelationIdGlobalFilterTest {
 

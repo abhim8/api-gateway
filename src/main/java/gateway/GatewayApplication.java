@@ -7,7 +7,7 @@ import reactor.core.publisher.Hooks;
 @SpringBootApplication
 public class GatewayApplication {
 
-    public static void main(String[] args) {
+    static void main(String[] args) {
         Hooks.enableAutomaticContextPropagation();
         SpringApplication.run(GatewayApplication.class, args);
     }

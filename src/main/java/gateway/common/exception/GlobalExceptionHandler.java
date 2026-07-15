@@ -1,8 +1,8 @@
 package gateway.common.exception;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.json.JsonMapper;
 import gateway.filter.CorrelationIdGlobalFilter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.springframework.boot.webflux.error.ErrorWebExceptionHandler;
@@ -23,17 +23,10 @@ import java.util.Map;
 @Component
 @Order(-2)
 @Slf4j
-public class GlobalErrorHandler implements ErrorWebExceptionHandler {
+@RequiredArgsConstructor
+public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
 
     private final ObjectMapper objectMapper;
-
-    public GlobalErrorHandler() {
-        this.objectMapper = JsonMapper.builder().build();
-    }
-
-    public GlobalErrorHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-    }
 
     @Override
     public @NonNull Mono<Void> handle(ServerWebExchange exchange, @NonNull Throwable throwable) {

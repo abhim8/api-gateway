@@ -1,10 +1,5 @@
 package gateway.common.exception;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -16,13 +11,18 @@ import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-class GlobalErrorHandlerTest {
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-    private GlobalErrorHandler handler;
+class GlobalExceptionHandlerTest {
+
+    private GlobalExceptionHandler handler;
 
     @BeforeEach
     void setUp() {
-        handler = new GlobalErrorHandler(new ObjectMapper());
+        handler = new GlobalExceptionHandler(new ObjectMapper());
     }
 
     @Test
@@ -88,7 +88,7 @@ class GlobalErrorHandlerTest {
         ObjectMapper failingMapper = mock(ObjectMapper.class);
         when(failingMapper.writeValueAsBytes(any())).thenThrow(new RuntimeException("serialization failed"));
 
-        GlobalErrorHandler failingHandler = new GlobalErrorHandler(failingMapper);
+        GlobalExceptionHandler failingHandler = new GlobalExceptionHandler(failingMapper);
         MockServerWebExchange exchange =
                 MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
 

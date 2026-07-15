@@ -3,7 +3,7 @@ package gateway.filter;
 import gateway.common.util.HeaderConstants;
 import gateway.observability.ResponseHeadersProperties;
 import io.opentelemetry.api.trace.Span;
-import java.util.UUID;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.MDC;
@@ -14,20 +14,19 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
+import java.util.UUID;
+
 @Component
 @Slf4j
+@RequiredArgsConstructor
 public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
 
     private final ResponseHeadersProperties responseHeadersProperties;
 
-    public CorrelationIdGlobalFilter(ResponseHeadersProperties responseHeadersProperties) {
-        this.responseHeadersProperties = responseHeadersProperties;
-    }
-
     @Override
-    public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, GatewayFilterChain chain) {
+    public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
         log.debug("Entering CorrelationIdGlobalFilter");
         String correlationId = resolveCorrelationId(exchange);
         exchange.getAttributes().put(CORRELATION_ID_ATTRIBUTE, correlationId);
@@ -62,7 +61,7 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                     }
                     return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                 })
-                .doFinally(signalType -> {
+                .doFinally(_ -> {
                     MDC.clear();
                     log.debug("Leaving CorrelationIdGlobalFilter");
                 });

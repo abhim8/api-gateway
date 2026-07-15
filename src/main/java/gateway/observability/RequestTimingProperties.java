@@ -1,8 +1,13 @@
 package gateway.observability;
 
-import java.time.Duration;
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import java.time.Duration;
+
+@Setter
+@Getter
 @ConfigurationProperties(prefix = "gateway.logging.request-timing")
 public class RequestTimingProperties {
 
@@ -10,19 +15,4 @@ public class RequestTimingProperties {
 
     private Duration slowRequestThreshold = Duration.ofMillis(1000);
 
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-    }
-
-    public Duration getSlowRequestThreshold() {
-        return slowRequestThreshold;
-    }
-
-    public void setSlowRequestThreshold(Duration slowRequestThreshold) {
-        this.slowRequestThreshold = slowRequestThreshold;
-    }
 }

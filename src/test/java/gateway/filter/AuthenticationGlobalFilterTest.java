@@ -1,11 +1,5 @@
 package gateway.filter;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
 import gateway.auth.AuthenticationProvider;
 import gateway.auth.AuthenticationResult;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,6 +11,8 @@ import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class AuthenticationGlobalFilterTest {
 

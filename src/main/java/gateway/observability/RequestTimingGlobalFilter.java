@@ -2,6 +2,8 @@ package gateway.observability;
 
 import gateway.filter.CorrelationIdGlobalFilter;
 import io.opentelemetry.api.trace.Span;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.message.StringMapMessage;
@@ -35,25 +37,21 @@ import java.net.InetSocketAddress;
  * attributes and {@link Span#current()} rather than MDC, because MDC is owned by the
  * inner CorrelationIdGlobalFilter and is cleared before this filter's doFinally runs.
  */
+@Slf4j
+@RequiredArgsConstructor
 public class RequestTimingGlobalFilter implements GlobalFilter, Ordered {
-
-    private static final Logger log = LogManager.getLogger(RequestTimingGlobalFilter.class);
 
     static final String UNKNOWN = "unknown";
     static final String EVENT = "request-completed";
 
     private final long slowRequestThresholdMs;
 
-    public RequestTimingGlobalFilter(long slowRequestThresholdMs) {
-        this.slowRequestThresholdMs = slowRequestThresholdMs;
-    }
-
     @Override
     public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
         long startTime = System.nanoTime();
 
         return chain.filter(exchange)
-                .doFinally(signalType -> logTiming(exchange, startTime));
+                .doFinally(_ -> logTiming(exchange, startTime));
     }
 
     @Override
@@ -86,9 +84,9 @@ public class RequestTimingGlobalFilter implements GlobalFilter, Ordered {
             }
 
             if (durationMs > slowRequestThresholdMs) {
-                log.warn(msg);
+                log.warn(String.valueOf(msg));
             } else {
-                log.info(msg);
+                log.info(String.valueOf(msg));
             }
         } catch (Exception e) {
             log.error("Failed to log request timing", e);
