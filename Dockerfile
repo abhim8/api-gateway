@@ -14,4 +14,4 @@ USER gateway
 WORKDIR /app
 COPY --from=builder /build/target/*.jar app.jar
 EXPOSE 8000
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-jar", "app.jar"]
