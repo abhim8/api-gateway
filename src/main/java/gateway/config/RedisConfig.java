@@ -4,8 +4,12 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.connection.RedisClusterConfiguration;
@@ -13,17 +17,18 @@ import org.springframework.data.redis.connection.lettuce.LettuceClientConfigurat
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializer;
+import org.springframework.data.redis.serializer.SerializationException;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
-public final class RedisConfig {
+@Configuration
+public class RedisConfig {
 
-    @Value("${spring.data.redis.host}")
+    @Value("${spring.data.redis.host:localhost}")
     private String redisHost;
-    @Value("${spring.data.redis.port}")
+    @Value("${spring.data.redis.port:6379}")
     private int redisPort;
-    @Value("${spring.data.redis.password}")
+    @Value("${spring.data.redis.password:}")
     private String redisPassword;
 
     @Bean
@@ -38,19 +43,19 @@ public final class RedisConfig {
         RedisClusterConfiguration redisClusterConfiguration = new RedisClusterConfiguration();
         redisClusterConfiguration.clusterNode(redisHost, redisPort);
         redisClusterConfiguration.setPassword(redisPassword);
-        LettuceClientConfiguration configuration = LettucePoolingClientConfiguration.builder().useSsl().disablePeerVerification().build();
+        LettuceClientConfiguration configuration =
+                LettucePoolingClientConfiguration.builder()
+                        .useSsl()
+                        .disablePeerVerification()
+                        .build();
         return new LettuceConnectionFactory(redisClusterConfiguration, configuration);
     }
 
-    /**
-     * Configure RedisTemplate for string key/value operations
-     */
     @Bean
     @Primary
     public RedisTemplate<String, String> redisTemplate(LettuceConnectionFactory connectionFactory, RedisSerializer<Object> serializer) {
         RedisTemplate<String, String> template = new RedisTemplate<>();
 
-        // Use StringRedisSerializer for both keys and values
         StringRedisSerializer stringRedisSerializer = new StringRedisSerializer();
         template.setKeySerializer(stringRedisSerializer);
         template.setValueSerializer(stringRedisSerializer);
@@ -66,7 +71,7 @@ public final class RedisConfig {
 
     @Bean
     public RedisSerializer<Object> redisSerializer() {
-        return new GenericJackson2JsonRedisSerializer(generateObjectMapperForRedisCacheConfig());
+        return new ObjectMapperRedisSerializer(generateObjectMapperForRedisCacheConfig());
     }
 
     private static ObjectMapper generateObjectMapperForRedisCacheConfig() {
@@ -78,5 +83,33 @@ public final class RedisConfig {
         // LaissezFaireSubTypeValidator allows any type to be deserialized
         objectMapper.activateDefaultTyping(LaissezFaireSubTypeValidator.instance, ObjectMapper.DefaultTyping.NON_FINAL, JsonTypeInfo.As.WRAPPER_ARRAY);
         return objectMapper;
+    }
+
+    private record ObjectMapperRedisSerializer(ObjectMapper objectMapper)
+            implements RedisSerializer<Object> {
+
+        @Override
+        public byte @Nullable [] serialize(Object value) throws SerializationException {
+            if (value == null) {
+                return new byte[0];
+            }
+            try {
+                return objectMapper.writeValueAsBytes(value);
+            } catch (Exception e) {
+                throw new SerializationException("Could not serialize to JSON", e);
+            }
+        }
+
+        @Override
+        public @Nullable Object deserialize(byte @NonNull [] bytes) throws SerializationException {
+            if (bytes.length == 0) {
+                return null;
+            }
+            try {
+                return objectMapper.readValue(bytes, Object.class);
+            } catch (Exception e) {
+                throw new SerializationException("Could not deserialize from JSON", e);
+            }
+        }
     }
 }

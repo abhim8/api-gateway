@@ -11,6 +11,16 @@ spring:
     timeout-per-shutdown-phase: 30s
   codec:
     max-in-memory-size: 256KB
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
 
   cloud:
     gateway:

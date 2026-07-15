@@ -133,6 +133,18 @@
             </exclusions>
         </dependency>
 
+        <!-- Jackson JSR310 (required by RedisConfig for JavaTimeModule) -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+        </dependency>
+
+        <!-- Apache Commons Pool2 (required by RedisConfig LettucePoolingClientConfiguration) -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
