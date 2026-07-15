@@ -5,6 +5,8 @@ server:
     connection-timeout: 5s
 
 spring:
+  profiles:
+    active: local
   application:
     name: api-gateway
   lifecycle:
@@ -18,9 +20,6 @@ spring:
       password: ${REDIS_PASSWORD:}
       timeout: 2s
       connect-timeout: 2s
-  jackson:
-    serialization:
-      write-dates-as-timestamps: false
 
   cloud:
     gateway:
@@ -39,6 +38,11 @@ spring:
               uri: ${TEMPLATE_SERVICE_URL:http://localhost:8002}
               predicates:
                 - Path=/api/v1/templates
+              filters:
+                - name: RequestRateLimiter
+                  args:
+                    key-resolver: "#{@gatewayKeyResolver}"
+                    rate-limiter: "#{@redisRateLimiter}"
       httpclient:
         response-timeout: 5s
         connect-timeout: 3000
@@ -86,9 +90,9 @@ gateway:
       enabled: true
       correlation-id: true
   rate-limit:
-    enabled: false
-    replenish-rate: 1
-    burst-capacity: 1
+    enabled: true
+    replenish-rate: 2
+    burst-capacity: 2
     requested-tokens: 1
     deny-empty-key: true
     empty-key-status: 401
