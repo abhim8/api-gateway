@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -22,7 +23,8 @@ class GlobalExceptionHandlerTest {
 
     @BeforeEach
     void setUp() {
-        handler = new GlobalExceptionHandler(new ObjectMapper());
+        handler = new GlobalExceptionHandler();
+        ReflectionTestUtils.setField(handler, "objectMapper", new ObjectMapper());
     }
 
     @Test
@@ -88,7 +90,8 @@ class GlobalExceptionHandlerTest {
         ObjectMapper failingMapper = mock(ObjectMapper.class);
         when(failingMapper.writeValueAsBytes(any())).thenThrow(new RuntimeException("serialization failed"));
 
-        GlobalExceptionHandler failingHandler = new GlobalExceptionHandler(failingMapper);
+        GlobalExceptionHandler failingHandler = new GlobalExceptionHandler();
+        ReflectionTestUtils.setField(failingHandler, "objectMapper", failingMapper);
         MockServerWebExchange exchange =
                 MockServerWebExchange.from(MockServerHttpRequest.get("/test").build());
 

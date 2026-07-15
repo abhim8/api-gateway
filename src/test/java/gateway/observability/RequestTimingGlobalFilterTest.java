@@ -5,7 +5,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LogEvent;
 import org.apache.logging.log4j.core.Logger;
 import org.apache.logging.log4j.core.appender.AbstractAppender;
-import org.apache.logging.log4j.message.MapMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,11 +49,11 @@ class RequestTimingGlobalFilterTest {
 
         List<LogEvent> events = memoryAppender.getEvents();
         assertThat(events).isNotEmpty();
-        MapMessage<?, ?> msg = (MapMessage<?, ?>) events.get(0).getMessage();
-        assertThat(msg.get("event")).isEqualTo("request-completed");
-        assertThat(msg.get("method")).isEqualTo("GET");
-        assertThat(msg.get("path")).isEqualTo("/test");
-        assertThat(msg.get("status")).isEqualTo("200");
+        String msg = events.get(0).getMessage().getFormattedMessage();
+        assertThat(msg).contains("event=\"request-completed\"");
+        assertThat(msg).contains("method=\"GET\"");
+        assertThat(msg).contains("path=\"/test\"");
+        assertThat(msg).contains("status=\"200\"");
         assertThat(events.get(0).getLevel()).isEqualTo(Level.INFO);
     }
 
@@ -68,10 +67,10 @@ class RequestTimingGlobalFilterTest {
 
         List<LogEvent> events = memoryAppender.getEvents();
         assertThat(events).isNotEmpty();
-        MapMessage<?, ?> msg = (MapMessage<?, ?>) events.get(0).getMessage();
-        assertThat(msg.get("event")).isEqualTo("request-completed");
-        assertThat(msg.get("method")).isEqualTo("GET");
-        assertThat(msg.get("path")).isEqualTo("/test");
+        String msg = events.get(0).getMessage().getFormattedMessage();
+        assertThat(msg).contains("event=\"request-completed\"");
+        assertThat(msg).contains("method=\"GET\"");
+        assertThat(msg).contains("path=\"/test\"");
     }
 
     @Test
