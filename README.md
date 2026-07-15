@@ -157,6 +157,7 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | `server.port` | `8000` | HTTP listen port |
 | `gateway.authentication.provider` / `GATEWAY_AUTHENTICATION_PROVIDER` | `mock` | Authentication provider (`mock` or `remote`) |
 | `GATEWAY_CORS_ORIGINS` | `https://app.example.com` | Allowed CORS origins |
+| `TEMPLATE_SERVICE_URL` | `http://localhost:8002` | Downstream URI for the template service |
 | `spring.cloud.gateway.httpclient.response-timeout` | `5s` | Global upstream timeout |
 | `spring.codec.max-in-memory-size` | `256KB` | Request body size limit |
 | `DEFAULT_LOG_LEVEL` | `INFO` | Root log level |
@@ -197,6 +198,22 @@ docker run -p 8000:8000 -e GATEWAY_AUTHENTICATION_PROVIDER=mock api-gateway
 
 ```bash
 docker compose up --build
+```
+
+### Container Networking
+
+Downstream service URIs (e.g. `TEMPLATE_SERVICE_URL`) must resolve from inside the API Gateway container. Which address to use depends on where the downstream service runs:
+
+| Downstream location | Example URI | When to use |
+|---|---|---|
+| Host machine (Gateway in Docker) | `http://host.docker.internal:8002` | Gateway runs in a container, downstream service runs directly on the host (Docker Desktop for Mac/Windows). `host.docker.internal` resolves to the host from within the container. |
+| Same Docker network | `http://template-service:8002` | Both the Gateway and the downstream service run as Docker containers on the same user-defined bridge network. Compose service names resolve via built-in DNS. |
+| Direct execution | `http://localhost:8002` | Gateway runs via `mvn spring-boot:run` (no container). `localhost` refers to the same machine — the downstream service is accessible directly. |
+
+The `docker-compose.yml` sets `TEMPLATE_SERVICE_URL=http://host.docker.internal:8002` by default. Override it when running both services in Docker:
+
+```bash
+TEMPLATE_SERVICE_URL=http://template-service:8002 docker compose up --build
 ```
 
 ## Authentication
@@ -280,6 +297,7 @@ Multi-stage build:
 |----------|----------|---------|---------|
 | `GATEWAY_AUTHENTICATION_PROVIDER` | No | `mock` | Select auth provider |
 | `GATEWAY_CORS_ORIGINS` | No | `https://app.example.com` | CORS allowed origins |
+| `TEMPLATE_SERVICE_URL` | No | `http://localhost:8002` | Downstream URI for the template service |
 | `DEFAULT_LOG_LEVEL` | No | `INFO` | Root logger level |
 | `OTEL_TRACES_EXPORTER` | No | `otlp` | OpenTelemetry exporter |
 | `OTEL_SERVICE_NAME` | Recommended | — | Tracer service name |

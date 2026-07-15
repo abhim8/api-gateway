@@ -4,8 +4,11 @@ services:
     container_name: api-gateway
     ports:
       - "8000:8000"
+    mem_limit: 512m
+    mem_reservation: 256m
     environment:
       - GATEWAY_AUTHENTICATION_PROVIDER=mock
       - DEFAULT_LOG_LEVEL=${DEFAULT_LOG_LEVEL:-INFO}
       - GATEWAY_CORS_ORIGINS=${GATEWAY_CORS_ORIGINS:-https://localhost:8000}
+      - TEMPLATE_SERVICE_URL=${TEMPLATE_SERVICE_URL:-http://host.docker.internal:8002}
     restart: unless-stopped
