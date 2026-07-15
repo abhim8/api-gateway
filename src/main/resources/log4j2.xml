@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Configuration status="WARN" shutdownHook="disable">
-    <Properties>
-        <Property name="defaultLogLevel">${env:DEFAULT_LOG_LEVEL:-INFO}</Property>
-    </Properties>
-
+<Configuration status="ERROR" >
     <Appenders>
-        <Console name="Console" target="SYSTEM_OUT">
-            <JsonTemplateLayout eventTemplateUri="classpath:log-layout.json"/>
+        <Console name="ConsoleAppender" target="SYSTEM_OUT">
+            <JsonTemplateLayout eventTemplateUri="classpath:log-layout.json">
+                <locationInfoEnabled>true</locationInfoEnabled>
+            </JsonTemplateLayout>
         </Console>
     </Appenders>
-
     <Loggers>
-        <Root level="${defaultLogLevel}">
-            <AppenderRef ref="Console"/>
+        <Root level="${env:DEFAULT_LOG_LEVEL:-INFO}" additivity="false">
+            <AppenderRef ref="ConsoleAppender" />
         </Root>
     </Loggers>
 </Configuration>
