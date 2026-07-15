@@ -75,6 +75,13 @@ gateway:
     response-headers:
       enabled: true
       correlation-id: true
+  rate-limit:
+    enabled: false
+    replenish-rate: 1
+    burst-capacity: 1
+    requested-tokens: 1
+    deny-empty-key: true
+    empty-key-status: 401
 
 logging:
   level:
