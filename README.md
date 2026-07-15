@@ -17,11 +17,10 @@ The API Gateway is the single entry point for all external traffic into the plat
 
 **Deliberately out of scope**
 
-- JWT validation or OAuth2 — the platform has no authorization layer yet; auth is a pluggable strategy
+- Authorization (JWT, OAuth2, API keys) — authentication is pluggable but no authorization layer is implemented
 - TLS termination — delegated to the Kubernetes ingress
-- API key management — deferred to V2
-- Rate limiting — requires Redis, deferred to V2
-- Dynamic route management — deferred to V2
+- Rate limiting — requires Redis, not currently integrated
+- Dynamic route management — requires Redis, not currently integrated
 
 ## Key Features
 
@@ -32,7 +31,6 @@ The API Gateway is the single entry point for all external traffic into the plat
 - Structured JSON logging (Log4j2 + JsonTemplateLayout)
 - Prometheus metrics via Micrometer (`/actuator/prometheus`)
 - Distributed tracing via OpenTelemetry (auto-instrumentation)
-- Liveness and readiness health probes
 - JSON error bodies for all HTTP error statuses (no HTML whitelabel)
 - Docker multi-stage build with non-root user
 - Docker Compose for local development
@@ -42,8 +40,9 @@ The API Gateway is the single entry point for all external traffic into the plat
 ```mermaid
 graph TB
     Client["Client"] --> Gateway["API Gateway<br/>SCG 5.x / Netty / WebFlux"]
-    Gateway --> AuthProvider["Authentication Provider"]
-    AuthProvider --> AuthPlatform["Auth Platform<br/>(future)"]
+    Gateway --> AuthProvider["AuthenticationProvider"]
+    AuthProvider --> Mock["MockAuthenticationProvider"]
+    AuthProvider --> Remote["RemoteAuthenticationProvider"]
     Gateway --> ServiceA["Upstream Service A"]
     Gateway --> ServiceB["Upstream Service B"]
     Gateway --> ServiceC["Upstream Service C"]
@@ -57,11 +56,9 @@ graph TB
     Gateway -.-> Metrics
     Gateway -.-> Tracing
     Gateway -.-> Logging
-
-    style AuthPlatform stroke-dasharray: 5 5
 ```
 
-The gateway is stateless — every pod is identical. No Redis, no database, no local state.
+The gateway is stateless — every pod is identical. No Redis, no database, no local state. Authentication is delegated to a pluggable `AuthenticationProvider` abstraction with two implementations: `MockAuthenticationProvider` (always authenticates) and `RemoteAuthenticationProvider` (delegates to an external service).
 
 ## Request Lifecycle
 
@@ -123,7 +120,7 @@ sequenceDiagram
 ```
 gateway/
 ├── config/   # Bean selection — decides which AuthenticationProvider to wire up
-├── auth/     # Authentication strategy: interface, result record, mock impl, remote stub
+├── auth/     # Authentication strategy: interface, result record, mock impl, remote impl
 ├── filter/   # Custom GlobalFilter implementations (auth, correlation ID)
 ├── web/      # Fallback controller — structured 503 when circuit breaker is open
 └── common/   # Shared error handler (JSON error body) and header constants
@@ -185,7 +182,7 @@ Every push and pull request is automatically built via GitHub Actions — format
 ./mvnw spring-boot:run
 ```
 
-The gateway starts on port 8000 with mock authentication (no Auth Platform needed).
+The gateway starts on port 8000 with mock authentication by default.
 
 **Docker**
 
@@ -218,29 +215,29 @@ TEMPLATE_SERVICE_URL=http://template-service:8002 docker compose up --build
 
 ## Authentication
 
-Every request goes through `AuthenticationGlobalFilter` (order -75) before route matching. The filter delegates to a configurable `AuthenticationProvider`.
+Authentication is delegated to a pluggable `AuthenticationProvider` abstraction. Every request passes through `AuthenticationGlobalFilter` (order -75) before route matching, which calls the configured provider.
 
 ```mermaid
 graph LR
     Request --> AuthGlobalFilter["AuthenticationGlobalFilter<br/>order -75"]
-    AuthGlobalFilter --> AuthProvider
+    AuthGlobalFilter --> AuthProvider["AuthenticationProvider"]
 
     AuthProvider --> Mock["MockAuthenticationProvider<br/>(mode: mock)"]
     AuthProvider --> Remote["RemoteAuthenticationProvider<br/>(mode: remote)"]
 
-    Mock --> Result["authenticated = true<br/>subject = mock-user"]
-    Remote --> Unsupported["throws UnsupportedOperationException"]
+    Mock --> MockResult["authenticated = true<br/>subject = mock-user"]
+    Remote --> RemoteResult["authenticated = false<br/>(delegates to external service)"]
 
-    Result --> Continue["→ Continue to route matching"]
-    Unsupported --> Blocked["→ Future: Auth Platform call"]
+    MockResult --> Continue["→ Continue to route matching"]
+    RemoteResult --> Continue
 ```
 
-| Mode | Provider | Behavior |
-|------|----------|----------|
-| `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O — no HTTP, no JWT, no crypto. Suitable for local development and CI. |
-| `remote` | `RemoteAuthenticationProvider` | Throws `UnsupportedOperationException`. Placeholder for future Auth Platform integration. Will call the Auth Platform's `/auth/validate` endpoint. |
+| Mode | Provider | Description |
+|------|----------|-------------|
+| `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O — no HTTP, no JWT, no crypto. Suitable for local development and testing. |
+| `remote` | `RemoteAuthenticationProvider` | Delegates authentication to an external authentication service. This repository provides the integration point only; the external service is implementation-specific. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
 
-Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`.
+Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`. Set to `mock` (default) for local development or `remote` for deployments with an external authentication service.
 
 ## Observability
 
@@ -300,7 +297,7 @@ Multi-stage build:
 | `TEMPLATE_SERVICE_URL` | No | `http://localhost:8002` | Downstream URI for the template service |
 | `DEFAULT_LOG_LEVEL` | No | `INFO` | Root logger level |
 | `OTEL_TRACES_EXPORTER` | No | `otlp` | OpenTelemetry exporter |
-| `OTEL_SERVICE_NAME` | Recommended | — | Tracer service name |
+| `OTEL_SERVICE_NAME` | No | — | Tracer service name |
 | `JAVA_TOOL_OPTIONS` | No | — | JVM flags (heap, GC, agent) |
 
 ### Logging
@@ -340,21 +337,13 @@ A Postman collection is available at `docs/postman/api-gateway.postman_collectio
 | Folder | Purpose |
 |--------|---------|
 | Health | Gateway health probes and metrics endpoints |
-| Authentication | Placeholder for future Auth Platform integration |
+| Authentication | Requests requiring authentication (gateway authenticates before proxying) |
 | Gateway | Requests proxied to downstream services through configured routes |
 | Fallback | Local fallback endpoints invoked when a circuit breaker is open |
 
 ## Current Limitations
 
-- `RemoteAuthenticationProvider` is a stub — it throws `UnsupportedOperationException` until the Auth Platform endpoint is available
+- No authorization layer (JWT validation, OAuth2, API keys, roles, permissions)
 - No rate limiting (requires Redis)
 - No dynamic route management (requires Redis)
-- No API key authentication
-- No fine-grained authorization (roles, permissions — the `AuthenticationResult` record has fields for them but no provider populates them yet)
 
-## Future Roadmap
-
-- Auth Platform integration (replace mock with real token validation)
-- Rate limiting with Redis
-- API key authentication
-- Dynamic route management with Redis
