@@ -3,11 +3,10 @@ package gateway.auth;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
-public class RemoteAuthenticationProvider implements AuthenticationProvider {
+public class MockAuthenticationProvider implements AuthenticationProvider {
 
     @Override
     public Mono<AuthenticationResult> authenticate(ServerWebExchange exchange) {
-        return Mono.error(new UnsupportedOperationException(
-                "Auth Platform integration is not implemented yet."));
+        return Mono.just(AuthenticationResult.authenticated("mock-user"));
     }
 }

@@ -89,8 +89,8 @@ resilience4j:
         baseConfig: default
 
 gateway:
-  auth:
-    mode: mock
+  authentication:
+    provider: mock
 
 logging:
   level:

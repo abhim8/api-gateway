@@ -302,7 +302,7 @@ spring:
 
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Multi-stage build (Java 21, non-root user, port 8000) |
+| `Dockerfile` | Multi-stage build (Java 26, non-root user, port 8000) |
 | `docker-compose.yml` | Build and run the gateway with environment variable passthrough |
 
 ### Usage

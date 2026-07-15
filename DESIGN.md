@@ -16,7 +16,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 
 | Goal | How |
 |------|-----|
-| **Security-first** | Delegate authentication to the Auth Platform (separate service) |
+| **Security-first** | Every request goes through an AuthenticationProvider; delegate to Auth Platform (future) |
 | **Resilient by default** | Circuit breaker, retry, and timeout via SCG built-in filter factories |
 | **Observable** | Structured JSON logs, Micrometer metrics, OpenTelemetry traces |
 | **Operable** | Health probes, graceful shutdown, Docker ready |
@@ -118,7 +118,7 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
             │     API Gateway Pod (xN)        │
             │  Spring Cloud Gateway 4.x       │
             │  Netty / WebFlux / Reactor      │
-            │  Java 21                        │
+            │  Java 26                        │
             │                                 │
              │  ┌─── Filter Pipeline ───────┐  │
              │  │ CORS → Correlation →      │  │
@@ -159,13 +159,18 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 │                    API Gateway (Pod)                      │
 │                                                           │
 │  ┌──────────────────────────────────────────────────┐    │
-│  │              Security Chain                       │    │
+│  │           Authentication Pipeline                 │    │
 │  │  ┌────────────────────────────────────────────┐  │    │
-│  │  │  AuthenticationProvider (remote)            │  │    │
-│  │  │  - Delegates to Auth Platform               │  │    │
-│  │  │  - Reactive WebClient call                  │  │    │
-│  │  │  - Principal extraction                      │  │    │
+│  │  │  AuthenticationGlobalFilter                │  │    │
+│  │  │  ┌──────────────────────────────────────┐  │  │    │
+│  │  │  │  AuthenticationProvider (interface)   │  │  │    │
+│  │  │  │  ├─ MockAuthenticationProvider        │  │  │    │
+│  │  │  │  │    (always authenticated)           │  │  │    │
+│  │  │  │  └─ RemoteAuthenticationProvider       │  │  │    │
+│  │  │  │       (future Auth Platform call)      │  │  │    │
+│  │  │  └──────────────────────────────────────┘  │  │    │
 │  │  └────────────────────────────────────────────┘  │    │
+│  │  Always runs — every request, every route.       │    │
 │  └──────────────────────────────────────────────────┘    │
 │                                                           │
 │  ┌──────────────────────────────────────────────────┐    │
@@ -173,7 +178,8 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 │  │                                                  │    │
 │  │  Pre-filters:                                    │    │
 │  │    ├─ CorsGlobalFilter              (built-in)   │    │
-│  │    └─ CorrelationIdGlobalFilter    (custom)     │    │
+│  │    ├─ CorrelationIdGlobalFilter    (custom)     │    │
+│  │    └─ AuthenticationGlobalFilter    (custom)    │    │
 │  │                                                  │    │
 │  │  Route filters: (per-route YAML)                 │    │
 │  │    ├─ RetryGatewayFilterFactory     (built-in)   │    │
@@ -198,7 +204,11 @@ Build a lightweight, secure, and observable API Gateway that acts as the single 
 
 | Component | Type | Responsibility |
 |-----------|------|----------------|
-| `AuthenticationProvider` | Spring Security | JWT validation, path authorization, CORS |
+| `AuthenticationGlobalFilter` | Custom `GlobalFilter` | Always runs authentication before routing |
+| `AuthenticationProvider` | Custom interface | Strategy interface for authentication |
+| `MockAuthenticationProvider` | Custom impl | Returns authenticated=true, no I/O |
+| `RemoteAuthenticationProvider` | Custom impl | Future Auth Platform call (not implemented) |
+| `AuthenticationResult` | Custom record | Auth result with subject, roles, permissions, claims |
 | `RouteLocator` | SCG built-in | Route matching from YAML definitions |
 | `CorrelationIdGlobalFilter` | Custom `GlobalFilter` | Generate/propagate `X-Correlation-ID` |
 | `RetryGatewayFilterFactory` | SCG built-in | Retry on 5xx with exponential backoff |
@@ -236,10 +246,19 @@ Client                  Gateway                           Upstream
   │                   └───┬──────────┘                       │
   │                       │                                  │
   │                   ┌───▼──────────┐                       │
-  │                   │ 4. Spring    │                       │
-  │                   │ Security     │                       │
-  │                   │ JWT validate │                       │
-  │                   │ role check   │                       │
+  │                   │ 4. Authentication                   │
+  │                   │ GlobalFilter  │                       │
+  │                   │               │                       │
+  │                   │  ┌─────────┐  │                       │
+  │                   │  │ Auth    │  │                       │
+  │                   │  │ Provider│  │                       │
+  │                   │  │─ Mock:  │  │                       │
+  │                   │  │  always │  │                       │
+  │                   │  │  pass   │  │                       │
+  │                   │  │─ Remote:│  │                       │
+  │                   │  │  throws │  │                       │
+  │                   │  │  Unsup. │  │                       │
+  │                   │  └─────────┘  │                       │
   │                   └───┬──────────┘                       │
   │                       │                                  │
   │                   ┌───▼──────────┐                       │
@@ -282,7 +301,7 @@ Client                  Gateway                           Upstream
 | 1 | Netty HTTP parser | 400 (malformed request) |
 | 2 | `CorsGlobalFilter` | 403 (origin denied) |
 | 3 | `CorrelationIdGlobalFilter` | — |
-| 4 | Spring Security `SecurityWebFilterChain` | 401 (no/invalid JWT), 403 (insufficient role) |
+| 4 | `AuthenticationGlobalFilter` → `AuthenticationProvider` | 401 (unauthenticated), 500 (provider error) |
 | 5 | SCG `RouteLocator` | 404 (no matching route) |
 | 6 | SCG `RetryGatewayFilterFactory` | Retries transparently; 502 if all fail |
 | 7 | SCG `CircuitBreakerGatewayFilterFactory` | 503 + fallback response |
@@ -297,10 +316,10 @@ Client                  Gateway                           Upstream
 
 ```
 Order   Filter                          Source        Type
-──────  ────────────────────────────    ──────────    ──────────────
+────────────────────────────────────────────────────────────
 -200    CorsGlobalFilter                SCG built-in  Global (all routes)
 -100    CorrelationIdGlobalFilter      Custom        Global (all routes)
-  -1    SecurityWebFilterChain          Spring Sec    Security filter
+ -75    AuthenticationGlobalFilter      Custom        Global (all routes)
   +0    Route predicates + per-route    SCG + YAML    Per-route
         filters (Retry, CB, headers)
  +100   GlobalErrorHandler              Custom        Error handler (post)
@@ -313,8 +332,8 @@ Order   Filter                          Source        Type
 | Filter | Implementation | Notes |
 |--------|---------------|-------|
 | CORS | `spring.cloud.gateway.globalcors` | YAML config only |
-| Correlation ID | `CorrelationIdGlobalFilter` | Only custom global filter |
-| JWT Auth | Spring Security OAuth2 RS | `SecurityConfig.java` |
+| Correlation ID | `CorrelationIdGlobalFilter` | Custom global filter |
+| Authentication | `AuthenticationGlobalFilter` | Always runs; delegates to `AuthenticationProvider` |
 | Metrics | Micrometer auto-config | No code needed |
 | Tracing | OTel Java agent auto-instrumentation | No code needed |
 | Error handling | `GlobalErrorHandler` | Custom `ErrorWebExceptionHandler` |
@@ -338,23 +357,27 @@ Order   Filter                          Source        Type
 
 ```
 gateway
-├── GatewayApplication.java          # @SpringBootApplication
+├── GatewayApplication.java              # @SpringBootApplication
+├── config/
+│   └── AuthConfig.java                  # Authentication provider selection
 ├── auth/
-│   ├── AuthenticationProvider.java  # Authentication delegation interface
-│   ├── AuthenticationResult.java    # Auth response model
-│   └── RemoteAuthenticationProvider.java  # Remote Auth Platform client
+│   ├── AuthenticationProvider.java      # Authentication delegation interface
+│   ├── AuthenticationResult.java        # Auth response model (subject, roles, permissions, claims)
+│   ├── MockAuthenticationProvider.java  # Always returns authenticated=true
+│   └── RemoteAuthenticationProvider.java  # Future Auth Platform client (stub)
 ├── filter/
-│   └── CorrelationIdGlobalFilter.java  # X-Correlation-ID global filter
+│   ├── AuthenticationGlobalFilter.java  # Always runs auth before routing
+│   └── CorrelationIdGlobalFilter.java   # X-Correlation-ID global filter
 ├── web/
-│   └── FallbackController.java      # Circuit breaker fallback endpoint
+│   └── FallbackController.java          # Circuit breaker fallback endpoint
 └── common/
     ├── exception/
-    │   └── GlobalErrorHandler.java  # Structured error responses
+    │   └── GlobalErrorHandler.java      # Structured error responses
     └── util/
-        └── HeaderConstants.java     # Header name constants
+        └── HeaderConstants.java         # Header name constants
 ```
 
-**Total custom classes: 8** (GatewayApplication, AuthenticationProvider, AuthenticationResult, RemoteAuthenticationProvider, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
+**Total custom classes: 11** (GatewayApplication, AuthConfig, AuthenticationProvider, AuthenticationResult, MockAuthenticationProvider, RemoteAuthenticationProvider, AuthenticationGlobalFilter, CorrelationIdGlobalFilter, FallbackController, GlobalErrorHandler, HeaderConstants)
 
 ### Package Dependency Rules
 
@@ -468,73 +491,72 @@ spring:
 
 ## 11. Security Design
 
-### Authentication Delegation
+### Authentication Pipeline
 
-Authentication is delegated to the Auth Platform via a reactive `WebClient` call:
+Every request goes through `AuthenticationGlobalFilter` (order -75) before any route matching. The filter delegates to a configurable `AuthenticationProvider`:
 
-```yaml
-spring:
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: https://auth-platform.example.com
-          jwk-set-uri: https://auth-platform.example.com/.well-known/jwks.json
+```
+Request
+  │
+  ▼
+AuthenticationGlobalFilter
+  │
+  ▼
+  ┌──────────────────────────────────┐
+  │  AuthenticationProvider          │
+  │  ┌────────────┐ ┌─────────────┐ │
+  │  │ Mock       │ │ Remote      │ │
+  │  │ (mode=mock)│ │ (mode=remote)│ │
+  │  │ always     │ │ throws      │ │
+  │  │ auth=true  │ │ Unsupported │ │
+  │  └────────────┘ └─────────────┘ │
+  └──────────────────────────────────┘
+  │
+  ▼
+AuthenticationResult
+  │ authenticated=false → 401 Unauthorized
+  │ authenticated=true  → continue to route matching
 ```
 
-**AuthenticationProvider interface:**
+**Mode selection** via `application.yml`:
+```yaml
+gateway:
+  auth:
+    mode: mock    # or "remote"
+```
+
+### AuthenticationProvider interface:
 - `Mono<AuthenticationResult> authenticate(ServerWebExchange exchange)`
-- Receives token from `Authorization` header
-- Delegates validation to Auth Platform via HTTP
-- Returns `AuthenticationResult` with principal, roles, success/failure
+- Receives the full `ServerWebExchange` for request inspection
+- Returns `AuthenticationResult` with authenticated flag, subject, roles, permissions, claims
 
-**RemoteAuthenticationProvider (stub):**
-- Implements `AuthenticationProvider` using `WebClient`
-- Calls `POST /auth/validate` on Auth Platform
-- Configurable timeout, retry, circuit breaker
-- Placeholder for future Auth Platform integration
+### MockAuthenticationProvider
+- Returns `authenticated = true` with subject `"mock-user"`
+- No HTTP calls, no JWT, no crypto — zero I/O
+- Suitable for local development and CI
 
-**Future:**
-- Replace stub with actual Auth Platform gRPC/HTTP endpoint
-- Add token caching with TTL
-- Introduce audience/scope validation
+### RemoteAuthenticationProvider (stub):
+- Currently throws `UnsupportedOperationException("Auth Platform integration is not implemented yet.")`
+- Will later make an HTTP call to the Auth Platform's `/auth/validate` endpoint
+- Configurable timeout, retry, circuit breaker (future)
 
-### Security Rules
+### AuthenticationResult
 
 ```java
-@Configuration
-@EnableWebFluxSecurity
-public class SecurityConfig {
-
-    @Bean
-    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
-        return http
-            .authorizeExchange(exchanges -> exchanges
-                // Public routes
-                .pathMatchers(GET, "/actuator/health/**").permitAll()
-                .pathMatchers(GET, "/actuator/info").permitAll()
-                .pathMatchers("/fallback/**").permitAll()
-
-                // Protected routes — require authentication
-                .pathMatchers("/api/v1/**").authenticated()
-
-                // Admin routes — require specific role
-                .pathMatchers("/actuator/**").hasRole("ADMIN")
-
-                // Everything else requires auth
-                .anyExchange().authenticated()
-            )
-            .oauth2ResourceServer(oauth2 -> oauth2
-                .jwt(Customizer.withDefaults())
-            )
-            .build();
-    }
-}
+public record AuthenticationResult(
+    boolean authenticated,
+    String subject,
+    List<String> roles,
+    List<String> permissions,
+    Map<String, Object> claims
+)
 ```
+
+Future-proof design — when RemoteAuthenticationProvider is implemented, it can populate roles, permissions, and claims without changing the contract.
 
 ### CORS
 
-Configured at the SCG level, not Spring Security. Preflight OPTIONS never hits auth:
+Configured at the SCG level. Preflight OPTIONS requests go through the authentication filter (mock mode always passes):
 
 ```yaml
 spring:
@@ -550,14 +572,7 @@ spring:
             maxAge: 1800
 ```
 
-### Security Headers (auto-added by Spring Security)
-
-```
-X-Content-Type-Options: nosniff
-X-Frame-Options: DENY
-Strict-Transport-Security: max-age=31536000; includeSubDomains
-Cache-Control: no-store
-```
+**Note:** Spring Security has been removed from the project. Authentication is handled entirely by the `AuthenticationGlobalFilter` + `AuthenticationProvider` pipeline, avoiding the complexity of OAuth2, JWKS, and Spring Security filter chains.
 
 ---
 
@@ -852,7 +867,7 @@ Multi-stage build with `Dockerfile`:
 
 ```dockerfile
 # Stage 1: Build the application
-FROM eclipse-temurin:21-jdk AS builder
+FROM eclipse-temurin:26-jdk AS builder
 WORKDIR /build
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
@@ -861,7 +876,7 @@ COPY src src
 RUN ./mvnw -B package -DskipTests
 
 # Stage 2: Runtime
-FROM eclipse-temurin:21-jre AS runtime
+FROM eclipse-temurin:26-jre AS runtime
 RUN groupadd -r gateway && useradd -r -g gateway gateway
 USER gateway
 WORKDIR /app

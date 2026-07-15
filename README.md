@@ -15,7 +15,7 @@ Spring Cloud Gateway 5.x front-door proxy for a microservices platform.
 
 ## Authentication
 
-The API Gateway **delegates** authentication to a dedicated Auth Platform. It does not validate JWTs, manage tokens, or implement any authentication logic itself.
+Every request **must** go through an `AuthenticationProvider`. The gateway never bypasses authentication.
 
 Two authentication modes are available:
 
