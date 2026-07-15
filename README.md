@@ -119,16 +119,17 @@ sequenceDiagram
 
 ```
 gateway/
-├── config/   # Bean selection - decides which AuthenticationProvider to wire up
-├── auth/     # Authentication strategy: interface, result record, mock impl, remote impl
-├── filter/   # Custom GlobalFilter implementations (auth, correlation ID)
-├── web/      # Fallback controller - structured 503 when circuit breaker is open
-└── common/   # Shared error handler (JSON error body) and header constants
+├── config/         # Bean selection - decides which AuthenticationProvider to wire up
+├── auth/           # Authentication strategy: interface, result record, mock impl, remote impl
+├── filter/         # Custom GlobalFilter implementations (auth, correlation ID)
+├── observability/  # Request timing filter and configuration
+├── web/            # Fallback controller - structured 503 when circuit breaker is open
+└── common/         # Shared error handler (JSON error body) and header constants
 ```
 
-Dependency flow: `config → auth`, `filter → auth + common`, `web → common`, `common → (none)`. No circular dependencies.
+Dependency flow: `config → auth`, `filter → auth + common`, `observability → filter + common`, `web → common`, `common → (none)`. No circular dependencies.
 
-**Custom classes: 11**. Everything else is YAML configuration or SCG built-in filters.
+**Custom classes: 14**. Everything else is YAML configuration or SCG built-in filters.
 
 ## Technology Stack
 
@@ -264,6 +265,21 @@ OpenTelemetry Java agent auto-instruments the Netty HTTP server and client at ru
 ### Correlation IDs
 
 `CorrelationIdGlobalFilter` (order -100) generates an `X-Correlation-ID` if the request does not already carry one. The value is populated into the MDC as `correlationId` and appears in all structured log entries.
+
+### Request Timing
+
+`RequestTimingGlobalFilter` (order -110) measures total request processing time for every request. It wraps around all other filters so the recorded duration includes correlation ID resolution, authentication, route matching, built-in filters (retry, circuit breaker), and the upstream proxy call.
+
+On completion, the filter logs the method, path, status, duration in milliseconds, route ID, correlation ID, trace ID, and remote IP. Requests exceeding the `slow-request-threshold` are logged at WARN level; all others at INFO level.
+
+Configured under `gateway.logging.request-timing`:
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `gateway.logging.request-timing.enabled` | `true` | Enables the timing filter |
+| `gateway.logging.request-timing.slow-request-threshold` | `1000ms` | Duration threshold above which a request is logged at WARN |
+
+The filter is fully non-blocking (WebFlux), uses `System.nanoTime()` for precision, and never throws exceptions from the logging path.
 
 ## Resilience
 

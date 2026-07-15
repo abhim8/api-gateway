@@ -15,7 +15,8 @@
     "field": "name"
   },
   "message": {
-    "$resolver": "message"
+    "$resolver": "message",
+    "stringified": false
   },
   "thread": {
     "$resolver": "thread",

@@ -67,6 +67,10 @@ resilience4j:
 gateway:
   authentication:
     provider: mock
+  logging:
+    request-timing:
+      enabled: true
+      slow-request-threshold: 1000ms
 
 logging:
   level:
