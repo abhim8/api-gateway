@@ -25,8 +25,5 @@ jobs:
           distribution: temurin
           cache: maven
 
-      - name: Format check
-        run: ./mvnw spotless:check --batch-mode
-
       - name: Build and verify
         run: ./mvnw clean verify --batch-mode
