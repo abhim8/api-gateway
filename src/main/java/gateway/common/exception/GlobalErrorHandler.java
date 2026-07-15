@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import gateway.filter.CorrelationIdGlobalFilter;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.boot.webflux.error.ErrorWebExceptionHandler;
 import org.springframework.core.annotation.Order;
 import org.springframework.core.io.buffer.DataBuffer;
@@ -35,14 +36,19 @@ public class GlobalErrorHandler implements ErrorWebExceptionHandler {
     }
 
     @Override
-    public Mono<Void> handle(ServerWebExchange exchange, Throwable throwable) {
+    public @NonNull Mono<Void> handle(ServerWebExchange exchange, @NonNull Throwable throwable) {
         HttpStatusCode status = resolveStatus(throwable);
         String statusText = resolveError(throwable);
         String path = exchange.getRequest().getPath().value();
         String correlationId = resolveCorrelationId(exchange);
 
+        if (exchange.getResponse().isCommitted()) {
+            log.error("Response already committed for request {}, cannot write error response", path, throwable);
+            return Mono.error(throwable);
+        }
+
         if (status.is5xxServerError()) {
-            log.error("Unhandled exception for request {}: {}", path, throwable.getMessage(), throwable);
+            log.error("Unhandled exception for request {}", path, throwable);
         } else {
             log.warn("Request {} failed with {} {}: {}", path, status.value(), statusText, throwable.getMessage());
         }

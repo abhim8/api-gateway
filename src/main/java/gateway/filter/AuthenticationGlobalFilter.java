@@ -2,6 +2,7 @@ package gateway.filter;
 
 import gateway.auth.AuthenticationProvider;
 import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
@@ -23,7 +24,8 @@ public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
     }
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public @NonNull Mono<Void> filter(ServerWebExchange exchange, @NonNull GatewayFilterChain chain) {
+        log.debug("Entering AuthenticationGlobalFilter");
         String method = exchange.getRequest().getMethod().name();
         String path = exchange.getRequest().getURI().getPath();
         String providerName = authenticationProvider.getClass().getSimpleName();
@@ -44,7 +46,8 @@ public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
                     exchange.getAttributes().put(AUTH_RESULT_ATTRIBUTE, result);
                     return chain.filter(exchange);
                 })
-                .doOnError(e -> log.error("Unexpected exception from AuthenticationProvider ({}):", providerName, e));
+                .doOnError(e -> log.error("Unexpected exception from AuthenticationProvider ({}):", providerName, e))
+                .doFinally(_ -> log.debug("Leaving AuthenticationGlobalFilter"));
     }
 
     @Override

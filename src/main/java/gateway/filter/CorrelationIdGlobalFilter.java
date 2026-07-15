@@ -3,6 +3,8 @@ package gateway.filter;
 import gateway.common.util.HeaderConstants;
 import io.opentelemetry.api.trace.Span;
 import java.util.UUID;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.MDC;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
@@ -12,12 +14,14 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 @Component
+@Slf4j
 public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
 
     @Override
-    public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
+    public @NonNull Mono<Void> filter(@NonNull ServerWebExchange exchange, GatewayFilterChain chain) {
+        log.debug("Entering CorrelationIdGlobalFilter");
         String correlationId = resolveCorrelationId(exchange);
         exchange.getAttributes().put(CORRELATION_ID_ATTRIBUTE, correlationId);
 
@@ -34,7 +38,11 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
         return chain.filter(mutatedExchange)
                 .then(Mono.defer(() -> {
-                    mutatedExchange.getResponse().getHeaders().add(HeaderConstants.X_CORRELATION_ID, correlationId);
+                    if (!mutatedExchange.getResponse().isCommitted()) {
+                        mutatedExchange.getResponse().getHeaders().add(HeaderConstants.X_CORRELATION_ID, correlationId);
+                    } else {
+                        log.debug("Response already committed, skipping correlation ID response header");
+                    }
                     MDC.clear();
                     return Mono.empty();
                 }))
@@ -48,7 +56,8 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
                     }
                     return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                 })
-                .then();
+                .then()
+                .doFinally(_ -> log.debug("Leaving CorrelationIdGlobalFilter"));
     }
 
     @Override
