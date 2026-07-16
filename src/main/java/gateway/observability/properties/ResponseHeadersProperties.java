@@ -9,8 +9,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "gateway.observability.response-headers")
 public class ResponseHeadersProperties {
 
-    private boolean enabled = true;
+    private boolean enabled;
 
-    private boolean correlationId = true;
+    private boolean correlationId;
 
 }

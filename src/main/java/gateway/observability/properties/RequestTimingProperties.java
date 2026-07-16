@@ -11,8 +11,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "gateway.logging.request-timing")
 public class RequestTimingProperties {
 
-    private boolean enabled = true;
+    private boolean enabled;
 
-    private Duration slowRequestThreshold = Duration.ofMillis(1000);
+    private Duration slowRequestThreshold;
 
 }

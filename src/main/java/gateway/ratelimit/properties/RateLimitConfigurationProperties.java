@@ -9,15 +9,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "gateway.rate-limit")
 public class RateLimitConfigurationProperties {
 
-    private boolean enabled = false;
+    private boolean enabled;
 
-    private int replenishRate = 1;
+    private int replenishRate;
 
-    private int burstCapacity = 1;
+    private int burstCapacity;
 
-    private int requestedTokens = 1;
+    private int requestedTokens;
 
-    private boolean denyEmptyKey = true;
+    private boolean denyEmptyKey;
 
-    private int emptyKeyStatus = 401;
+    private int emptyKeyStatus;
 }
