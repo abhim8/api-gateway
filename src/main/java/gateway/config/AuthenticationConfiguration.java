@@ -19,14 +19,18 @@ import reactor.netty.http.client.HttpClient;
 @EnableConfigurationProperties(RemoteAuthenticationProperties.class)
 public class AuthenticationConfiguration {
 
+    static final String AUTH_PROVIDER_PROPERTY = "gateway.authentication.provider";
+    static final String AUTH_PROVIDER_MOCK = "mock";
+    static final String AUTH_PROVIDER_REMOTE = "remote";
+
     @Bean
-    @ConditionalOnProperty(name = "gateway.authentication.provider", havingValue = "mock", matchIfMissing = true)
+    @ConditionalOnProperty(name = AUTH_PROVIDER_PROPERTY, havingValue = AUTH_PROVIDER_MOCK, matchIfMissing = true)
     public AuthenticationProvider mockAuthenticationProvider() {
         return new MockAuthenticationProvider();
     }
 
     @Bean
-    @ConditionalOnProperty(name = "gateway.authentication.provider", havingValue = "remote")
+    @ConditionalOnProperty(name = AUTH_PROVIDER_PROPERTY, havingValue = AUTH_PROVIDER_REMOTE)
     public WebClient remoteAuthWebClient(RemoteAuthenticationProperties properties) {
         HttpClient httpClient = HttpClient.create()
                 .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, (int) properties.getConnectTimeout().toMillis())
@@ -40,7 +44,7 @@ public class AuthenticationConfiguration {
     }
 
     @Bean
-    @ConditionalOnProperty(name = "gateway.authentication.provider", havingValue = "remote")
+    @ConditionalOnProperty(name = AUTH_PROVIDER_PROPERTY, havingValue = AUTH_PROVIDER_REMOTE)
     public AuthenticationProvider remoteAuthenticationProvider(WebClient remoteAuthWebClient) {
         return new RemoteAuthenticationProvider(remoteAuthWebClient);
     }

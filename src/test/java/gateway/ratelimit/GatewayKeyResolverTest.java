@@ -116,7 +116,7 @@ class GatewayKeyResolverTest {
                 AuthenticationResult.unauthenticated());
 
         StepVerifier.create(resolver.resolve(exchange))
-                .expectNext("anonymous")
+                .expectNext(GatewayKeyResolver.ANONYMOUS)
                 .verifyComplete();
     }
 

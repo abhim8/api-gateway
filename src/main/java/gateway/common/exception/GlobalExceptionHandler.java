@@ -25,6 +25,8 @@ import java.time.LocalDateTime;
 @Slf4j
 public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
 
+    private static final String UNKNOWN_METHOD = "UNKNOWN";
+
     private final ObjectMapper objectMapper;
     private final ExceptionMapper exceptionMapper;
 
@@ -98,7 +100,7 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
 
     private void logError(HttpStatus status, ServerWebExchange exchange, Throwable throwable) {
         String method = exchange.getRequest().getMethod() != null
-                ? exchange.getRequest().getMethod().name() : "UNKNOWN";
+                ? exchange.getRequest().getMethod().name() : UNKNOWN_METHOD;
         String path = exchange.getRequest().getPath().value();
         String correlationId = resolveCorrelationId(exchange);
 

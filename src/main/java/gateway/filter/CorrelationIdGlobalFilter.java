@@ -22,6 +22,9 @@ import java.util.UUID;
 public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
     public static final String CORRELATION_ID_ATTRIBUTE = "correlationId";
+    public static final String MDC_CORRELATION_ID = "correlationId";
+    public static final String MDC_TRACE_ID = "traceId";
+    public static final String MDC_SPAN_ID = "spanId";
 
     private final ResponseHeadersProperties responseHeadersProperties;
 
@@ -52,12 +55,12 @@ public class CorrelationIdGlobalFilter implements GlobalFilter, Ordered {
 
         return chain.filter(mutatedExchange)
                 .contextWrite(ctx -> {
-                    MDC.put(CORRELATION_ID_ATTRIBUTE, correlationId);
+                    MDC.put(MDC_CORRELATION_ID, correlationId);
                     if (traceId != null) {
-                        MDC.put("traceId", traceId);
+                        MDC.put(MDC_TRACE_ID, traceId);
                     }
                     if (spanId != null) {
-                        MDC.put("spanId", spanId);
+                        MDC.put(MDC_SPAN_ID, spanId);
                     }
                     return ctx.put(CORRELATION_ID_ATTRIBUTE, correlationId);
                 })

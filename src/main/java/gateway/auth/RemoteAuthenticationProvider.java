@@ -25,7 +25,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class RemoteAuthenticationProvider implements AuthenticationProvider {
 
-    private static final String AUTH_VALIDATE_PATH = "/internal/v1/auth/validate";
+    static final String AUTH_VALIDATE_PATH = "/internal/v1/auth/validate";
+    static final String GATEWAY_USER_AGENT = "api-gateway";
+    static final String CLAIMS_USERNAME = "username";
+    static final String CLAIMS_EMAIL = "email";
+    static final String CLAIMS_EXPIRES_AT = "expiresAt";
+    static final String CLAIMS_TENANT_ID = "tenantId";
 
     private final WebClient webClient;
 
@@ -45,7 +50,7 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
                 .uri(AUTH_VALIDATE_PATH)
                 .headers(headers -> {
                     headers.setContentType(MediaType.APPLICATION_JSON);
-                    headers.set(HttpHeaders.USER_AGENT, "api-gateway");
+                    headers.set(HttpHeaders.USER_AGENT, GATEWAY_USER_AGENT);
                     if (correlationId != null) {
                         headers.set(HeaderConstants.X_CORRELATION_ID, correlationId);
                     }
@@ -103,35 +108,35 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
 
     private static List<String> extractForwardedHeaderNames(AuthenticationHeaders headers) {
         List<String> names = new java.util.ArrayList<>();
-        if (headers.authorization() != null) names.add("Authorization");
-        if (headers.apiKey() != null) names.add("X-API-Key");
-        if (headers.cookie() != null) names.add("Cookie");
-        if (headers.userAgent() != null) names.add("User-Agent");
-        if (headers.xForwardedFor() != null) names.add("X-Forwarded-For");
-        if (headers.xForwardedHost() != null) names.add("X-Forwarded-Host");
-        if (headers.xForwardedPort() != null) names.add("X-Forwarded-Port");
-        if (headers.xForwardedProto() != null) names.add("X-Forwarded-Proto");
-        if (headers.xForwardedPrefix() != null) names.add("X-Forwarded-Prefix");
-        if (headers.origin() != null) names.add("Origin");
-        if (headers.referer() != null) names.add("Referer");
-        if (headers.acceptLanguage() != null) names.add("Accept-Language");
-        if (headers.host() != null) names.add("Host");
+        if (headers.authorization() != null) names.add(HttpHeaders.AUTHORIZATION);
+        if (headers.apiKey() != null) names.add(HeaderConstants.X_API_KEY);
+        if (headers.cookie() != null) names.add(HttpHeaders.COOKIE);
+        if (headers.userAgent() != null) names.add(HttpHeaders.USER_AGENT);
+        if (headers.xForwardedFor() != null) names.add(HeaderConstants.X_FORWARDED_FOR);
+        if (headers.xForwardedHost() != null) names.add(HeaderConstants.X_FORWARDED_HOST);
+        if (headers.xForwardedPort() != null) names.add(HeaderConstants.X_FORWARDED_PORT);
+        if (headers.xForwardedProto() != null) names.add(HeaderConstants.X_FORWARDED_PROTO);
+        if (headers.xForwardedPrefix() != null) names.add(HeaderConstants.X_FORWARDED_PREFIX);
+        if (headers.origin() != null) names.add(HttpHeaders.ORIGIN);
+        if (headers.referer() != null) names.add(HttpHeaders.REFERER);
+        if (headers.acceptLanguage() != null) names.add(HttpHeaders.ACCEPT_LANGUAGE);
+        if (headers.host() != null) names.add(HttpHeaders.HOST);
         return names;
     }
 
     private AuthenticationResult toResult(AuthValidationResponse response) {
         HashMap<String, Object> claims = new HashMap<>();
         if (response.username() != null) {
-            claims.put("username", response.username());
+            claims.put(CLAIMS_USERNAME, response.username());
         }
         if (response.email() != null) {
-            claims.put("email", response.email());
+            claims.put(CLAIMS_EMAIL, response.email());
         }
         if (response.expiresAt() != null) {
-            claims.put("expiresAt", response.expiresAt().toString());
+            claims.put(CLAIMS_EXPIRES_AT, response.expiresAt().toString());
         }
-        if (response.metadata() != null && response.metadata().containsKey("tenantId")) {
-            claims.put("tenantId", response.metadata().get("tenantId"));
+        if (response.metadata() != null && response.metadata().containsKey(CLAIMS_TENANT_ID)) {
+            claims.put(CLAIMS_TENANT_ID, response.metadata().get(CLAIMS_TENANT_ID));
         }
 
         return new AuthenticationResult(

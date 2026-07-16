@@ -12,6 +12,8 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class GatewayKeyResolver implements KeyResolver {
 
+    static final String ANONYMOUS = "anonymous";
+
     @Override
     public @NonNull Mono<String> resolve(@NonNull ServerWebExchange exchange) {
         String apiKey = exchange.getRequest().getHeaders().getFirst(HeaderConstants.X_API_KEY);
@@ -43,6 +45,6 @@ public class GatewayKeyResolver implements KeyResolver {
         }
 
         log.debug("Rate limit key resolved as anonymous");
-        return Mono.just("anonymous");
+        return Mono.just(ANONYMOUS);
     }
 }

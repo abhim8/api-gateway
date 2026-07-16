@@ -52,10 +52,10 @@ class RemoteAuthenticationProviderTest {
                     assertEquals("user-123", result.subject());
                     assertEquals(List.of("USER", "ADMIN"), result.roles());
                     assertEquals(List.of("template.read", "template.write"), result.permissions());
-                    assertEquals("abhilash", result.claims().get("username"));
-                    assertEquals("abhilash@example.com", result.claims().get("email"));
-                    assertEquals("tenant-001", result.claims().get("tenantId"));
-                    assertEquals("2026-12-31T23:59:59Z", result.claims().get("expiresAt"));
+                    assertEquals("abhilash", result.claims().get(RemoteAuthenticationProvider.CLAIMS_USERNAME));
+                    assertEquals("abhilash@example.com", result.claims().get(RemoteAuthenticationProvider.CLAIMS_EMAIL));
+                    assertEquals("tenant-001", result.claims().get(RemoteAuthenticationProvider.CLAIMS_TENANT_ID));
+                    assertEquals("2026-12-31T23:59:59Z", result.claims().get(RemoteAuthenticationProvider.CLAIMS_EXPIRES_AT));
                 })
                 .verifyComplete();
     }

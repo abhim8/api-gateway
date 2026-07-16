@@ -27,7 +27,7 @@ class FallbackControllerTest {
                 .jsonPath("$.status")
                 .isEqualTo(503)
                 .jsonPath("$.error")
-                .isEqualTo("Service Unavailable")
+                .isEqualTo(FallbackController.ERROR_SERVICE_UNAVAILABLE)
                 .jsonPath("$.route")
                 .isEqualTo("test-route")
                 .jsonPath("$.correlationId")
@@ -46,7 +46,7 @@ class FallbackControllerTest {
                 .isEqualTo(503)
                 .expectBody()
                 .jsonPath("$.correlationId")
-                .isEqualTo("unknown");
+                .isEqualTo(FallbackController.DEFAULT_UNKNOWN);
     }
 
     @Test
@@ -59,7 +59,7 @@ class FallbackControllerTest {
                 .isEqualTo(503)
                 .expectBody()
                 .jsonPath("$.route")
-                .isEqualTo("unknown");
+                .isEqualTo(FallbackController.DEFAULT_UNKNOWN);
     }
 
     @Test
