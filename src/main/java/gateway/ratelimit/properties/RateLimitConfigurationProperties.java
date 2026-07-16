@@ -11,13 +11,13 @@ public class RateLimitConfigurationProperties {
 
     private boolean enabled;
 
-    private int replenishRate;
+    private int replenishRate = 1;
 
-    private int burstCapacity;
+    private int burstCapacity = 1;
 
-    private int requestedTokens;
+    private int requestedTokens = 1;
 
-    private boolean denyEmptyKey;
+    private boolean denyEmptyKey = true;
 
-    private int emptyKeyStatus;
+    private int emptyKeyStatus = 401;
 }

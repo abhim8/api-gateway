@@ -13,6 +13,6 @@ public class RequestTimingProperties {
 
     private boolean enabled;
 
-    private Duration slowRequestThreshold;
+    private Duration slowRequestThreshold = Duration.ofSeconds(5);
 
 }
