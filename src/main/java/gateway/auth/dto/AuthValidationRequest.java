@@ -1,4 +1,10 @@
 package gateway.auth.dto;
 
-public record AuthValidationRequest(String token, String requestId) {
+import lombok.Builder;
+
+@Builder
+public record AuthValidationRequest(
+    String requestId,
+    AuthenticationHeaders headers
+) {
 }

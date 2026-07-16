@@ -10,7 +10,7 @@ Stateless, reactive front-door proxy for a microservices platform. Built with Sp
 
 ## Project Overview
 
-The API Gateway is the single entry point for all external traffic into the platform's microservices ecosystem. It owns cross-cutting concerns so upstream services do not have to.
+The API Gateway is the single entry point for all external traffic into the platform's microservices ecosystem. It owns cross-cutting concerns so upstream services do not have to. The gateway is authentication-mechanism agnostic — it forwards the full authentication context to an external authentication platform without interpreting any credential format.
 
 **Responsibilities**
 
@@ -120,25 +120,33 @@ sequenceDiagram
 | 6 | SCG `RetryGatewayFilterFactory` | 502 |
 | 7 | SCG `CircuitBreakerGatewayFilterFactory` + fallback | 503 |
 | 8 | Netty `HttpClient` with response-timeout | 504 |
-| 9 | Post-filters + `GlobalErrorHandler` | - |
+| 9 | Post-filters + `GlobalExceptionHandler` | - |
 
 ## Package Structure
 
 ```
 gateway/
-├── config/         # Bean selection, Redis configuration
-├── auth/           # Authentication strategy: interface, result record, mock impl, remote impl
-├── filter/         # Custom GlobalFilter implementations (auth, correlation ID)
-├── observability/  # Request timing filter, response header configuration
+├── config/             # Bean selection, Redis configuration
+├── auth/               # Authentication strategy: interface, result record, mock impl, remote impl
+│   ├── dto/            # DTOs: AuthenticationHeaders, AuthenticationResult, AuthValidationRequest/Response
+│   └── properties/     # RemoteAuthenticationProperties
+├── filter/             # Custom GlobalFilter implementations (auth, correlation ID)
+├── observability/      # Request timing filter, response header configuration
+│   └── properties/     # RequestTimingProperties, ResponseHeadersProperties
+├── ratelimit/          # Rate limiting key resolver
+│   └── properties/     # RateLimitConfigurationProperties, RateLimiterConfiguration
 ├── resiliency/
-│   └── circuitbreaker/  # Circuit breaker properties, configuration, factory customizer
-├── web/            # Fallback controller - structured 503 when circuit breaker is open
-└── common/         # Shared error handler (JSON error body) and header constants
+│   └── circuitbreaker/ # Circuit breaker configuration, factory customizer
+│       └── properties/ # CircuitBreakerProperties
+├── web/                # Fallback controller - structured 503 when circuit breaker is open
+└── common/
+    ├── exception/      # GlobalExceptionHandler, ErrorResponse, ErrorCode, ExceptionMapper
+    └── util/           # HeaderConstants
 ```
 
 Dependency flow: `config → auth`, `filter → auth + common`, `observability → filter + common`, `web → common`, `common → (none)`. No circular dependencies.
 
-**Custom classes: 19**. Everything else is YAML configuration or SCG built-in filters.
+**Custom classes: 29**. Everything else is YAML configuration or SCG built-in filters.
 
 ## Technology Stack
 
@@ -181,13 +189,8 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | `DEFAULT_LOG_LEVEL` | `INFO` | Root log level |
 | `GATEWAY_LOG_LEVEL` | `DEBUG` | `gateway.*` package log level |
 | `OTEL_TRACES_EXPORTER` | `otlp` | OpenTelemetry trace exporter |
-| `gateway.rate-limit.enabled` | `false` | Enables rate limiting infrastructure |
-| `gateway.rate-limit.replenish-rate` | `1` | Tokens added per second |
-| `gateway.rate-limit.burst-capacity` | `1` | Maximum burst size |
-| `gateway.rate-limit.requested-tokens` | `1` | Tokens consumed per request |
-| `gateway.rate-limit.deny-empty-key` | `true` | Deny requests with empty key |
-| `gateway.rate-limit.empty-key-status` | `401` | HTTP status for empty key denial |
 | `gateway.circuit-breaker.enabled` | `false` | Enables custom circuit breaker configuration |
+| `gateway.rate-limit.enabled` | `false` | Enables rate limiting infrastructure |
 | `gateway.circuit-breaker.defaults.sliding-window-size` | `10` | Number of requests in the sliding window |
 | `gateway.circuit-breaker.defaults.minimum-number-of-calls` | `5` | Minimum calls before failure rate evaluation |
 | `gateway.circuit-breaker.defaults.failure-rate-threshold` | `50` | Failure rate percentage that opens the circuit |
@@ -251,7 +254,7 @@ TEMPLATE_SERVICE_URL=http://template-service:8002 docker compose up --build
 
 ## Authentication
 
-Authentication is delegated to a pluggable `AuthenticationProvider` abstraction. Every request passes through `AuthenticationGlobalFilter` (order -75) before route matching, which calls the configured provider.
+Authentication is delegated to a pluggable `AuthenticationProvider` abstraction. Every request passes through `AuthenticationGlobalFilter` (order -75) before route matching, which calls the configured provider. The gateway is **authentication-mechanism agnostic** — it forwards the full authentication context (13 header fields) to the external service without interpreting Bearer, Basic, API key, Cookie, or any other credential format.
 
 ```mermaid
 graph LR
@@ -262,7 +265,7 @@ graph LR
     AuthProvider --> Remote["RemoteAuthenticationProvider<br/>(mode: remote)"]
 
     Mock --> MockResult["authenticated = true<br/>subject = mock-user"]
-    Remote --> RemoteResult["authenticated = false<br/>(delegates to external service)"]
+    Remote --> RemoteResult["forwards 13 headers →<br/>Auth Platform decides"]
 
     MockResult --> Continue["→ Continue to route matching"]
     RemoteResult --> Continue
@@ -271,7 +274,7 @@ graph LR
 | Mode | Provider | Description |
 |------|----------|-------------|
 | `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O - no HTTP, no JWT, no crypto. Suitable for local development and testing. |
-| `remote` | `RemoteAuthenticationProvider` | Delegates authentication to an external authentication service. This repository provides the integration point only; the external service is implementation-specific. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
+| `remote` | `RemoteAuthenticationProvider` | Forwards the full authentication context (Authorization, Cookie, X-API-Key, and 10 forwarding headers) to an external authentication platform via `POST /internal/v1/auth/validate`. The gateway never interprets, decodes, or validates credentials — it passes the headers unchanged. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
 
 Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`. Set to `mock` (default) for local development or `remote` for deployments with an external authentication service.
 
@@ -323,7 +326,7 @@ Configured under `gateway.logging.request-timing`:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `gateway.logging.request-timing.enabled` | `true` | Enables the timing filter |
-| `gateway.logging.request-timing.slow-request-threshold` | `1000ms` | Duration threshold above which a request is logged at WARN |
+| `gateway.logging.request-timing.slow-request-threshold` | `5000ms` | Duration threshold above which a request is logged at WARN |
 
 The filter is fully non-blocking (WebFlux), uses `System.nanoTime()` for precision, and never throws exceptions from the logging path.
 
@@ -387,9 +390,9 @@ The `GatewayKeyResolver` resolves the rate limit key in the following order, sto
 
 The `RedisRateLimiter` requires a running Redis instance. The following beans are already configured in `RedisConfig` (`gateway.config`):
 
-- `LettuceConnectionFactory` - standalone (`local` profile) or cluster with TLS (`!local` profile)
+- `LettuceConnectionFactory` - standalone without SSL (`local` profile) or cluster with TLS and connection pooling (`!local` profile)
 - `RedisTemplate<String, String>` - with `StringRedisSerializer` and a JSON-capable default serializer
-- `RedisSerializer<Object>` - custom Jackson-based serializer with type metadata
+- `RedisSerializer<Object>` - custom Jackson-based serializer with type metadata (`ObjectMapperRedisSerializer`)
 
 ### Enabling Rate Limiting
 
@@ -520,17 +523,21 @@ Multi-stage build:
 
 | Variable | Required | Default | Purpose |
 |----------|----------|---------|---------|
-| `GATEWAY_AUTHENTICATION_PROVIDER` | No | `mock` | Select auth provider |
+| `GATEWAY_AUTHENTICATION_PROVIDER` | No | `mock` | Select auth provider (`mock` or `remote`) |
+| `GATEWAY_AUTHENTICATION_REMOTE_BASE_URL` | No | `http://localhost:8004` | Remote auth platform base URL (used when provider is `remote`) |
 | `GATEWAY_CORS_ORIGINS` | No | `https://app.example.com` | CORS allowed origins |
 | `TEMPLATE_SERVICE_URL` | No | `http://localhost:8002` | Downstream URI for the template service |
 | `DEFAULT_LOG_LEVEL` | No | `INFO` | Root logger level |
+| `GATEWAY_LOG_LEVEL` | No | `DEBUG` | `gateway.*` package log level |
 | `OTEL_TRACES_EXPORTER` | No | `otlp` | OpenTelemetry exporter |
-| `OTEL_SERVICE_NAME` | No | - | Tracer service name |
+| `OTEL_SERVICE_NAME` | No | `api-gateway` | Tracer service name |
 | `JAVA_TOOL_OPTIONS` | No | - | JVM flags (heap, GC, agent) |
 | `GATEWAY_RATE_LIMIT_ENABLED` | No | `false` | Enables rate limiting infrastructure |
 | `GATEWAY_RATE_LIMIT_REPLENISHRATE` | No | `1` | Tokens added per second |
 | `GATEWAY_RATE_LIMIT_BURSTCAPACITY` | No | `1` | Maximum burst size |
 | `GATEWAY_RATE_LIMIT_REQUESTEDTOKENS` | No | `1` | Tokens consumed per request |
+| `GATEWAY_RATE_LIMIT_DENYEMPTYKEY` | No | `true` | Deny requests with empty rate limit key |
+| `GATEWAY_RATE_LIMIT_EMPTYKEYSTATUS` | No | `401` | HTTP status for empty key denial |
 | `GATEWAY_CIRCUIT_BREAKER_ENABLED` | No | `false` | Enables custom circuit breaker configuration |
 
 ### Logging
@@ -569,7 +576,7 @@ A Postman collection is available at `docs/postman/api-gateway.postman_collectio
 
 | Folder | Purpose |
 |--------|---------|
-| Health | Gateway health probes and metrics endpoints |
-| Authentication | Requests requiring authentication (gateway authenticates before proxying) |
+| Actuator | Gateway health probes and metrics endpoints |
+| Authentication | External authentication platform API (not on the gateway itself) |
 | Gateway | Requests proxied to downstream services through configured routes |
 | Fallback | Local fallback endpoints invoked when a circuit breaker is open |

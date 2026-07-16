@@ -290,11 +290,11 @@ The `FallbackController` at `/fallback` returns a structured JSON response:
 
 ```json
 {
-  "timestamp": "2026-07-15T20:28:25.192Z",
   "status": 503,
-  "correlationId": "abc-123",
+  "error": "Service Unavailable",
   "route": "template-service",
-  "message": "Upstream service is temporarily unavailable"
+  "correlationId": "abc-123",
+  "timestamp": "2026-07-15T20:28:25.192Z"
 }
 ```
 

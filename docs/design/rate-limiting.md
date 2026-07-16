@@ -281,7 +281,7 @@ These metrics allow operators to track rate-limit effectiveness and detect clien
 
 - **Redis round-trip**: Each rate-limit check performs a single Redis command (EVALSHA for the Lua script). On a local network with Redis co-located, this typically completes in 0.5-2 ms.
 - **No serialization overhead**: The Lua script operates on Redis internal data types (float, long). No JSON serialization or deserialization.
-- **Connection pooling**: Lettuce connection pool (configured in `RedisConfig`) reuses connections, avoiding TCP handshake overhead per request.
+- **Connection pooling**: Lettuce connection pool (configured in `RedisConfig` for the `!local` profile) reuses connections, avoiding TCP handshake overhead per request.
 - **Impact on gateway throughput**: Rate limiting adds approximately 1-5 ms to each request (including network and Redis processing). For a typical upstream call taking 50-500 ms, this represents 1-10% overhead.
 - **No blocking**: All Redis interactions are reactive (Lettuce + Reactor). The gateway's event loop threads are not blocked during the rate-limit check.
 

@@ -85,28 +85,8 @@
     },
     {
       "name": "Authentication",
-      "description": "Future Auth Platform integration. Currently authentication is in mock mode - all requests pass through automatically.",
-      "item": [
-        {
-          "name": "Auth Platform Validation (future)",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer <token>",
-                "type": "text"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/auth/validate",
-              "host": ["{{baseUrl}}"],
-              "path": ["auth", "validate"]
-            }
-          },
-          "description": "Placeholder for the future Auth Platform integration. Will validate tokens against the Auth Platform. Not yet implemented."
-        }
-      ]
+      "description": "Authentication is handled transparently by the AuthenticationGlobalFilter. The gateway forwards 13 authentication headers (Authorization, Cookie, X-API-Key, and forwarding headers) to the external auth platform at POST /internal/v1/auth/validate. No gateway endpoint is exposed for authentication.",
+      "item": []
     },
     {
       "name": "Gateway",
