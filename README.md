@@ -187,6 +187,15 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | `gateway.rate-limit.requested-tokens` | `1` | Tokens consumed per request |
 | `gateway.rate-limit.deny-empty-key` | `true` | Deny requests with empty key |
 | `gateway.rate-limit.empty-key-status` | `401` | HTTP status for empty key denial |
+| `gateway.circuit-breaker.enabled` | `false` | Enables custom circuit breaker configuration |
+| `gateway.circuit-breaker.defaults.sliding-window-size` | `10` | Number of requests in the sliding window |
+| `gateway.circuit-breaker.defaults.minimum-number-of-calls` | `5` | Minimum calls before failure rate evaluation |
+| `gateway.circuit-breaker.defaults.failure-rate-threshold` | `50` | Failure rate percentage that opens the circuit |
+| `gateway.circuit-breaker.defaults.wait-duration-in-open-state` | `30s` | Time before attempting half-open |
+| `gateway.circuit-breaker.defaults.permitted-number-of-calls-in-half-open-state` | `3` | Trial requests in half-open state |
+| `gateway.circuit-breaker.defaults.automatic-transition-from-open-to-half-open-enabled` | `true` | Auto-transition to half-open |
+| `gateway.circuit-breaker.defaults.slow-call-rate-threshold` | `100` | Slow call rate threshold |
+| `gateway.circuit-breaker.defaults.slow-call-duration-threshold` | `60s` | Duration above which a call is considered slow |
 
 ## Running Locally
 
@@ -522,6 +531,7 @@ Multi-stage build:
 | `GATEWAY_RATE_LIMIT_REPLENISHRATE` | No | `1` | Tokens added per second |
 | `GATEWAY_RATE_LIMIT_BURSTCAPACITY` | No | `1` | Maximum burst size |
 | `GATEWAY_RATE_LIMIT_REQUESTEDTOKENS` | No | `1` | Tokens consumed per request |
+| `GATEWAY_CIRCUIT_BREAKER_ENABLED` | No | `false` | Enables custom circuit breaker configuration |
 
 ### Logging
 

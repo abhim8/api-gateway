@@ -17,7 +17,7 @@
 - [Failure Scenarios](#failure-scenarios)
 - [Operational Considerations](#operational-considerations)
 - [Performance Impact](#performance-impact)
-- [Future Extensibility](#future-extensibility)
+- [Extensibility](#extensibility)
 
 ---
 
@@ -84,7 +84,7 @@ Retry attempts to recover from transient failures. If the retries also fail, the
 Spring Cloud CircuitBreaker is an abstraction layer that provides a consistent API over multiple circuit breaker implementations (Resilience4j, Sentinel, Hystrix). It was chosen because:
 
 - **SCG integration**: Spring Cloud Gateway has a `CircuitBreakerGatewayFilterFactory` that integrates directly with Spring Cloud CircuitBreaker. Adding the `CircuitBreaker` filter to a route definition in YAML is sufficient to wrap upstream calls.
-- **Provider abstraction**: The abstraction allows switching the circuit breaker implementation without changing route definitions. If a future requirement demands a different provider (e.g., Sentinel for adaptive concurrency limiting), only the dependency and auto-configuration need to change.
+- **Provider abstraction**: The abstraction allows switching the circuit breaker implementation without changing route definitions. To use a different provider (e.g., Sentinel for adaptive concurrency limiting), only the dependency and auto-configuration need to change.
 - **Factory customization**: The `Resilience4JCircuitBreakerFactory` exposes a `configureDefault()` and `configure()` API that allows programmatic configuration of default and per-circuit-breaker settings. This is the hook used by `CircuitBreakerFactoryCustomizer`.
 
 The alternative was using `Resilience4j` directly without the SC CircuitBreaker abstraction. This was rejected because it would bypass SCG's built-in filter factory, requiring a custom `GatewayFilter` to wrap upstream calls - duplicating functionality that SCG already provides.
@@ -382,14 +382,14 @@ The performance impact of circuit breaking at the gateway is primarily a reducti
 
 ---
 
-## Future Extensibility
+## Extensibility
 
-**Dynamic configuration**: Resilience4j supports dynamic configuration updates through `@ConfigurationProperties` binding. Adding `@RefreshScope` to the configuration or using Spring Cloud Config would allow changing circuit breaker parameters without restarting the gateway.
+**Dynamic configuration**: Resilience4j supports dynamic configuration updates through `@ConfigurationProperties` binding. Adding `@RefreshScope` to the configuration or using Spring Cloud Config allows changing circuit breaker parameters without restarting the gateway.
 
-**Bulkhead isolation**: Resilience4j also provides a bulkhead pattern that limits concurrent calls to a service. This could be added alongside the circuit breaker to limit the number of in-flight requests to an upstream, preventing connection pool exhaustion even when the circuit is closed.
+**Bulkhead isolation**: Resilience4j also provides a bulkhead pattern that limits concurrent calls to a service. It can be added alongside the circuit breaker to limit the number of in-flight requests to an upstream, preventing connection pool exhaustion even when the circuit is closed.
 
-**Event-driven alerts**: Resilience4j's `CircuitBreakerEventPublisher` can be used to emit custom events for monitoring systems. For example, forwarding circuit breaker state changes to a webhook or logging structured events for analysis.
+**Event-driven alerts**: Resilience4j's `CircuitBreakerEventPublisher` emits custom events for monitoring systems — for example, forwarding circuit breaker state changes to a webhook or logging structured events for analysis.
 
-**Per-instance circuit breakers**: The current implementation creates one circuit breaker per route name. For services running multiple instances behind a load balancer, per-instance circuit breakers (e.g., using instance metadata from discovery) would allow failing over individual instances rather than the entire service.
+**Per-instance circuit breakers**: The implementation creates one circuit breaker per route name. For services running multiple instances behind a load balancer, per-instance circuit breakers (e.g., using instance metadata from discovery) allow failing over individual instances rather than the entire service.
 
-**Automatic fallback customization**: The `FallbackController` returns a generic 503 response. Future iterations could return cached responses, degrade functionality, or return stale data from a cache, depending on the route's requirements.
+**Automatic fallback customization**: The `FallbackController` returns a generic 503 response. Routes can return cached responses, degrade functionality, or return stale data from a cache by implementing custom fallback logic.

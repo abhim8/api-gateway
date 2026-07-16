@@ -21,7 +21,7 @@ Thanks for your interest in contributing to the API Gateway.
 ./mvnw spring-boot:run
 ```
 
-Starts on port 8000 with mock authentication (no external dependencies).
+Starts on port 8000 with mock authentication and rate limiting disabled. Redis is optional for local development — enable rate limiting only if you have a local Redis instance running.
 
 ### Docker
 

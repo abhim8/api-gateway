@@ -132,6 +132,25 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Fallback",
+      "description": "Local fallback endpoints invoked when a circuit breaker is open.",
+      "item": [
+        {
+          "name": "Circuit Breaker Fallback",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/fallback",
+              "host": ["{{baseUrl}}"],
+              "path": ["fallback"]
+            }
+          },
+          "description": "Fallback endpoint invoked by the CircuitBreaker filter when the circuit is open. Returns a 503 JSON response with correlation ID and route name."
+        }
+      ]
     }
   ]
 }

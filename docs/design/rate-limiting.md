@@ -17,7 +17,7 @@
 - [Failure Scenarios](#failure-scenarios)
 - [Operational Considerations](#operational-considerations)
 - [Performance Characteristics](#performance-characteristics)
-- [Future Extensibility](#future-extensibility)
+- [Extensibility](#extensibility)
 
 ---
 
@@ -287,14 +287,14 @@ These metrics allow operators to track rate-limit effectiveness and detect clien
 
 ---
 
-## Future Extensibility
+## Extensibility
 
-**Per-route rate-limit configuration**: The `RateLimitConfigurationProperties` currently provides a single set of rate-limit parameters (replenish rate, burst capacity). This could be extended to support per-route overrides, similar to the circuit breaker's `routes` map, by adding a `Map<String, RouteRateLimitConfig>` field to the properties class.
+**Per-route rate-limit configuration**: The `RateLimitConfigurationProperties` provides a single set of rate-limit parameters (replenish rate, burst capacity). Extending it to support per-route overrides, similar to the circuit breaker's `routes` map, requires adding a `Map<String, RouteRateLimitConfig>` field to the properties class.
 
-**Custom rate-limit headers**: The gateway could be extended to return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers, informing clients of their rate limit status. This requires wrapping the `RedisRateLimiter` response or implementing a custom `RateLimiter`.
+**Custom rate-limit headers**: The gateway can return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers by wrapping the `RedisRateLimiter` response or implementing a custom `RateLimiter`.
 
-**Distributed rate limiting with Redis Cluster**: The current Redis configuration supports both standalone and cluster modes. In cluster mode, rate-limit keys are sharded among cluster nodes. No code changes are required - the `LettuceConnectionFactory` configured in `RedisConfig` handles cluster routing transparently.
+**Distributed rate limiting with Redis Cluster**: The Redis configuration supports both standalone and cluster modes. In cluster mode, rate-limit keys are sharded among cluster nodes. No code changes are required — the `LettuceConnectionFactory` configured in `RedisConfig` handles cluster routing transparently.
 
-**Alternative rate-limit algorithms**: If token bucket proves unsuitable for a future use case (e.g., exact request spacing for a real-time API), a custom `RateLimiter` implementation can be swapped in without changing the route configuration. The `RequestRateLimiterGatewayFilterFactory` accepts any Spring bean implementing `RateLimiter`.
+**Alternative rate-limit algorithms**: If token bucket proves unsuitable for a use case (e.g., exact request spacing for a real-time API), a custom `RateLimiter` implementation can be swapped in without changing the route configuration. The `RequestRateLimiterGatewayFilterFactory` accepts any Spring bean implementing `RateLimiter`.
 
 **Integration with API management**: Rate-limit keys based on `X-API-Key` naturally integrate with an API management platform that provisions and rotates API keys. The resolver's priority system means API-key-based rate limits take precedence over IP-based limits, enabling tiered pricing models.
