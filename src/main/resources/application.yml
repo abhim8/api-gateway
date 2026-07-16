@@ -43,6 +43,10 @@ spring:
                   args:
                     key-resolver: "#{@gatewayKeyResolver}"
                     rate-limiter: "#{@redisRateLimiter}"
+                - name: CircuitBreaker
+                  args:
+                    name: template-service
+                    fallbackUri: forward:/fallback
       httpclient:
         response-timeout: 5s
         connect-timeout: 3000
@@ -69,18 +73,6 @@ management:
     tags:
       application: ${spring.application.name}
 
-resilience4j:
-  circuitbreaker:
-    configs:
-      default:
-        slidingWindowSize: 10
-        minimumNumberOfCalls: 5
-        failureRateThreshold: 50
-        waitDurationInOpenState: 30s
-        permittedNumberOfCallsInHalfOpenState: 3
-        automaticTransitionFromOpenToHalfOpenEnabled: true
-#    instances: {}
-
 gateway:
   authentication:
     provider: mock
@@ -100,12 +92,20 @@ gateway:
     deny-empty-key: true
     empty-key-status: 401
   circuit-breaker:
-    enabled: false
+    enabled: true
+    defaults:
+      sliding-window-size: 10
+      minimum-number-of-calls: 5
+      failure-rate-threshold: 50
+      wait-duration-in-open-state: 30s
+      permitted-number-of-calls-in-half-open-state: 3
+      automatic-transition-from-open-to-half-open-enabled: true
 
 logging:
   level:
     root: ${DEFAULT_LOG_LEVEL:INFO}
     gateway: DEBUG
+    io.github.resilience4j: DEBUG
     org.springframework.cloud.gateway.route.RouteDefinitionRouteLocator: WARN
 
 otel:

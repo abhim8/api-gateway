@@ -57,14 +57,14 @@ public class CircuitBreakerConfiguration {
         }
         CircuitBreakerProperties.CircuitBreakerConfigProperties result =
                 new CircuitBreakerProperties.CircuitBreakerConfigProperties();
-        result.setSlidingWindowSize(coalesce(overrides.getSlidingWindowSize(), defaults != null ? defaults.getSlidingWindowSize() : null));
-        result.setMinimumNumberOfCalls(coalesce(overrides.getMinimumNumberOfCalls(), defaults != null ? defaults.getMinimumNumberOfCalls() : null));
-        result.setFailureRateThreshold(coalesce(overrides.getFailureRateThreshold(), defaults != null ? defaults.getFailureRateThreshold() : null));
-        result.setWaitDurationInOpenState(coalesce(overrides.getWaitDurationInOpenState(), defaults != null ? defaults.getWaitDurationInOpenState() : null));
-        result.setPermittedNumberOfCallsInHalfOpenState(coalesce(overrides.getPermittedNumberOfCallsInHalfOpenState(), defaults != null ? defaults.getPermittedNumberOfCallsInHalfOpenState() : null));
-        result.setAutomaticTransitionFromOpenToHalfOpenEnabled(coalesce(overrides.getAutomaticTransitionFromOpenToHalfOpenEnabled(), defaults != null ? defaults.getAutomaticTransitionFromOpenToHalfOpenEnabled() : null));
-        result.setSlowCallRateThreshold(coalesce(overrides.getSlowCallRateThreshold(), defaults != null ? defaults.getSlowCallRateThreshold() : null));
-        result.setSlowCallDurationThreshold(coalesce(overrides.getSlowCallDurationThreshold(), defaults != null ? defaults.getSlowCallDurationThreshold() : null));
+        result.setSlidingWindowSize(coalesce(overrides.getSlidingWindowSize(), defaults.getSlidingWindowSize()));
+        result.setMinimumNumberOfCalls(coalesce(overrides.getMinimumNumberOfCalls(), defaults.getMinimumNumberOfCalls()));
+        result.setFailureRateThreshold(coalesce(overrides.getFailureRateThreshold(), defaults.getFailureRateThreshold()));
+        result.setWaitDurationInOpenState(coalesce(overrides.getWaitDurationInOpenState(), defaults.getWaitDurationInOpenState()));
+        result.setPermittedNumberOfCallsInHalfOpenState(coalesce(overrides.getPermittedNumberOfCallsInHalfOpenState(), defaults.getPermittedNumberOfCallsInHalfOpenState()));
+        result.setAutomaticTransitionFromOpenToHalfOpenEnabled(coalesce(overrides.getAutomaticTransitionFromOpenToHalfOpenEnabled(), defaults.getAutomaticTransitionFromOpenToHalfOpenEnabled()));
+        result.setSlowCallRateThreshold(coalesce(overrides.getSlowCallRateThreshold(), defaults.getSlowCallRateThreshold()));
+        result.setSlowCallDurationThreshold(coalesce(overrides.getSlowCallDurationThreshold(), defaults.getSlowCallDurationThreshold()));
         return result;
     }
 
