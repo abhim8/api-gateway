@@ -1,7 +1,7 @@
 package gateway.filter;
 
 import gateway.auth.AuthenticationProvider;
-import gateway.auth.AuthenticationResult;
+import gateway.auth.dto.AuthenticationResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;

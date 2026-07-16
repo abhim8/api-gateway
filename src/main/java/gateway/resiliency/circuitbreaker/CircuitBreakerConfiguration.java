@@ -1,5 +1,6 @@
 package gateway.resiliency.circuitbreaker;
 
+import gateway.resiliency.circuitbreaker.properties.CircuitBreakerProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig.Builder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;

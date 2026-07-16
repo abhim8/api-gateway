@@ -1,5 +1,6 @@
 package gateway.resiliency.circuitbreaker;
 
+import gateway.resiliency.circuitbreaker.properties.CircuitBreakerProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import org.junit.jupiter.api.Test;
 

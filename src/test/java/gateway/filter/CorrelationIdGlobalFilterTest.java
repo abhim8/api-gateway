@@ -1,7 +1,7 @@
 package gateway.filter;
 
 import gateway.common.util.HeaderConstants;
-import gateway.observability.ResponseHeadersProperties;
+import gateway.observability.properties.ResponseHeadersProperties;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.SpanContext;
 import io.opentelemetry.api.trace.TraceFlags;

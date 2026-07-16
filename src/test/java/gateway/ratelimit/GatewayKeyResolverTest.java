@@ -1,6 +1,6 @@
 package gateway.ratelimit;
 
-import gateway.auth.AuthenticationResult;
+import gateway.auth.dto.AuthenticationResult;
 import gateway.common.util.HeaderConstants;
 import gateway.filter.AuthenticationGlobalFilter;
 import org.junit.jupiter.api.Test;

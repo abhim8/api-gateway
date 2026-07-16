@@ -1,7 +1,7 @@
 package gateway.filter;
 
 import gateway.common.util.HeaderConstants;
-import gateway.observability.ResponseHeadersProperties;
+import gateway.observability.properties.ResponseHeadersProperties;
 import io.opentelemetry.api.trace.Span;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

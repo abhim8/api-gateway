@@ -1,5 +1,6 @@
 package gateway.resiliency.circuitbreaker;
 
+import gateway.resiliency.circuitbreaker.properties.CircuitBreakerProperties;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;

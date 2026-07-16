@@ -1,5 +1,7 @@
 package gateway.observability;
 
+import gateway.observability.properties.RequestTimingProperties;
+import gateway.observability.properties.ResponseHeadersProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.gateway.filter.GlobalFilter;

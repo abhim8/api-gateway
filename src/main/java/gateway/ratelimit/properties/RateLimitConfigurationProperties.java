@@ -1,4 +1,4 @@
-package gateway.ratelimit;
+package gateway.ratelimit.properties;
 
 import lombok.Getter;
 import lombok.Setter;

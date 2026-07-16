@@ -1,5 +1,6 @@
 package gateway.auth;
 
+import gateway.auth.dto.AuthenticationResult;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;

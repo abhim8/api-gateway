@@ -1,4 +1,4 @@
-package gateway.resiliency.circuitbreaker;
+package gateway.resiliency.circuitbreaker.properties;
 
 import lombok.Getter;
 import lombok.Setter;

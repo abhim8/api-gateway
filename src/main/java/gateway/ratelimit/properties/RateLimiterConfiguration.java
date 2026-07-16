@@ -1,5 +1,6 @@
-package gateway.ratelimit;
+package gateway.ratelimit.properties;
 
+import gateway.ratelimit.GatewayKeyResolver;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.gateway.filter.ratelimit.KeyResolver;

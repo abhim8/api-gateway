@@ -1,5 +1,6 @@
 package gateway.resiliency.circuitbreaker;
 
+import gateway.resiliency.circuitbreaker.properties.CircuitBreakerProperties;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cloud.circuitbreaker.resilience4j.Resilience4JCircuitBreakerFactory;

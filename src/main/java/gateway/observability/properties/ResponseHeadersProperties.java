@@ -1,4 +1,4 @@
-package gateway.observability;
+package gateway.observability.properties;
 
 import lombok.Getter;
 import lombok.Setter;

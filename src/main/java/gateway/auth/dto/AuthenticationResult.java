@@ -1,4 +1,4 @@
-package gateway.auth;
+package gateway.auth.dto;
 
 import java.util.List;
 import java.util.Map;
