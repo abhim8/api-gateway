@@ -7,6 +7,7 @@ import org.jspecify.annotations.NonNull;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -42,6 +43,14 @@ public class AuthenticationGlobalFilter implements GlobalFilter, Ordered {
                             result.subject(),
                             result.roles().isEmpty() ? "none" : result.roles());
                     exchange.getAttributes().put(AUTH_RESULT_ATTRIBUTE, result);
+
+                    HttpHeaders relayHeaders = result.relayResponseHeaders();
+                    if (relayHeaders != null && !relayHeaders.isEmpty()) {
+                        relayHeaders.forEach((name, values) ->
+                                values.forEach(value ->
+                                        exchange.getResponse().getHeaders().add(name, value)));
+                    }
+
                     return chain.filter(exchange);
                 })
                 .doOnError(e -> log.error("Unexpected exception from AuthenticationProvider ({}):", providerName, e))

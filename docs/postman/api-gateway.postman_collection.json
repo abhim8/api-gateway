@@ -85,7 +85,7 @@
     },
     {
       "name": "Authentication",
-      "description": "Authentication is handled transparently by the AuthenticationGlobalFilter. The gateway forwards 13 authentication headers (Authorization, Cookie, X-API-Key, and forwarding headers) to the external auth platform at POST /internal/v1/auth/validate. No gateway endpoint is exposed for authentication.",
+      "description": "Authentication is handled transparently by the AuthenticationGlobalFilter. The gateway forwards 13 authentication headers (Authorization, Cookie, X-API-Key, and forwarding headers) to the external auth platform at POST /internal/v1/auth/validate. AuthenticationClaims in the response contain only identity information (subject, username, email, roles, permissions, tenantId). Configured response headers (Authorization, Set-Cookie) from the auth platform are relayed to the client. No gateway endpoint is exposed for authentication.",
       "item": []
     },
     {

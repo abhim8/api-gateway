@@ -45,7 +45,8 @@ public class AuthenticationConfiguration {
 
     @Bean
     @ConditionalOnProperty(name = AUTH_PROVIDER_PROPERTY, havingValue = AUTH_PROVIDER_REMOTE)
-    public AuthenticationProvider remoteAuthenticationProvider(WebClient remoteAuthWebClient) {
-        return new RemoteAuthenticationProvider(remoteAuthWebClient);
+    public AuthenticationProvider remoteAuthenticationProvider(WebClient remoteAuthWebClient,
+                                                                RemoteAuthenticationProperties properties) {
+        return new RemoteAuthenticationProvider(remoteAuthWebClient, properties);
     }
 }

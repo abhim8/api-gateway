@@ -128,7 +128,7 @@ sequenceDiagram
 gateway/
 ├── config/             # Bean selection, Redis configuration
 ├── auth/               # Authentication strategy: interface, result record, mock impl, remote impl
-│   ├── dto/            # DTOs: AuthenticationHeaders, AuthenticationResult, AuthValidationRequest/Response
+│   ├── dto/            # DTOs: AuthenticationHeaders, AuthenticationResult, AuthenticationClaims, AuthValidationRequest/Response
 │   └── properties/     # RemoteAuthenticationProperties
 ├── filter/             # Custom GlobalFilter implementations (auth, correlation ID)
 ├── observability/      # Request timing filter, response header configuration
@@ -146,7 +146,7 @@ gateway/
 
 Dependency flow: `config → auth`, `filter → auth + common`, `observability → filter + common`, `web → common`, `common → (none)`. No circular dependencies.
 
-**Custom classes: 29**. Everything else is YAML configuration or SCG built-in filters.
+**Custom classes: 30**. Everything else is YAML configuration or SCG built-in filters.
 
 ## Technology Stack
 
@@ -189,6 +189,7 @@ Configuration follows Spring Boot's standard precedence: environment variables o
 | `DEFAULT_LOG_LEVEL` | `INFO` | Root log level |
 | `GATEWAY_LOG_LEVEL` | `DEBUG` | `gateway.*` package log level |
 | `OTEL_TRACES_EXPORTER` | `otlp` | OpenTelemetry trace exporter |
+| `gateway.authentication.remote.relay-response-headers` | `Authorization, Set-Cookie` | Response headers relayed from auth platform |
 | `gateway.circuit-breaker.enabled` | `false` | Enables custom circuit breaker configuration |
 | `gateway.rate-limit.enabled` | `false` | Enables rate limiting infrastructure |
 | `gateway.circuit-breaker.defaults.sliding-window-size` | `10` | Number of requests in the sliding window |
@@ -265,7 +266,7 @@ graph LR
     AuthProvider --> Remote["RemoteAuthenticationProvider<br/>(mode: remote)"]
 
     Mock --> MockResult["authenticated = true<br/>subject = mock-user"]
-    Remote --> RemoteResult["forwards 13 headers →<br/>Auth Platform decides"]
+    Remote --> RemoteResult["forwards 13 headers →<br/>Auth Platform decides<br/>+ relays response headers"]
 
     MockResult --> Continue["→ Continue to route matching"]
     RemoteResult --> Continue
@@ -274,9 +275,95 @@ graph LR
 | Mode | Provider | Description |
 |------|----------|-------------|
 | `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O - no HTTP, no JWT, no crypto. Suitable for local development and testing. |
-| `remote` | `RemoteAuthenticationProvider` | Forwards the full authentication context (Authorization, Cookie, X-API-Key, and 10 forwarding headers) to an external authentication platform via `POST /internal/v1/auth/validate`. The gateway never interprets, decodes, or validates credentials — it passes the headers unchanged. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
+| `remote` | `RemoteAuthenticationProvider` | Forwards the full authentication context (Authorization, Cookie, X-API-Key, and 10 forwarding headers) to an external authentication platform via `POST /internal/v1/auth/validate`. The gateway never interprets, decodes, or validates credentials — it passes the headers unchanged. After successful authentication, configured response headers from the auth platform are relayed to the client. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
 
 Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`. Set to `mock` (default) for local development or `remote` for deployments with an external authentication service.
+
+### Authentication Contract
+
+The `RemoteAuthenticationProvider` calls `POST /internal/v1/auth/validate` on the external authentication platform.
+
+**Request:**
+```json
+{
+  "requestId": "corr-123",
+  "headers": {
+    "authorization": "Bearer eyJhbGci...",
+    "apiKey": "ak-...",
+    "cookie": "session=abc",
+    "userAgent": "Mozilla/5.0",
+    "xForwardedFor": "10.0.0.1",
+    "xForwardedHost": "gateway.example.com",
+    "xForwardedPort": "443",
+    "xForwardedProto": "https",
+    "xForwardedPrefix": "/api",
+    "origin": "https://origin.example.com",
+    "referer": "https://referer.example.com/page",
+    "acceptLanguage": "en-US",
+    "host": "gateway.example.com"
+  }
+}
+```
+
+**Response (authenticated):**
+```json
+{
+  "authenticated": true,
+  "claims": {
+    "subject": "user-123",
+    "username": "abhilash",
+    "email": "abhilash@example.com",
+    "roles": ["USER", "ADMIN"],
+    "permissions": ["template.read", "template.write"],
+    "tenantId": "tenant-001",
+    "metadata": {}
+  }
+}
+```
+
+**Response (unauthenticated):**
+```json
+{
+  "authenticated": false
+}
+```
+
+The `AuthenticationClaims` record contains only identity and authorization information. Token lifecycle (expiry, refresh tokens, token status) is owned entirely by the Authentication Platform and never exposed to the Gateway.
+
+### Response Header Relay
+
+After successful authentication, the Gateway relays configured response headers from the Authentication Platform to the client response. This allows the auth platform to set session cookies, issue updated authorization tokens, or signal other authentication lifecycle events without the Gateway interpreting the values.
+
+| Header | Default | Purpose |
+|--------|---------|---------|
+| `Authorization` | relayed | Updated bearer or basic token after re-authentication |
+| `Set-Cookie` | relayed | Session cookies, refresh tokens, or other auth-related cookies |
+
+The Gateway:
+- Copies only headers listed in `relay-response-headers` from the auth platform response to the client response.
+- Never logs sensitive header values (Authorization, Set-Cookie, Cookie, X-API-Key).
+- Logs only the header names being relayed at DEBUG level.
+- Ignores headers not in the configured list.
+- Only relays headers on successful authentication (HTTP 200 with `authenticated: true`).
+
+The Gateway never:
+- Parses, decodes, or validates Bearer tokens.
+- Decodes Basic authentication credentials.
+- Inspects or interprets cookies.
+- Determines whether a token refresh occurred.
+
+### Configuration
+
+```yaml
+gateway:
+  authentication:
+    remote:
+      relay-response-headers:
+        - Authorization
+        - Set-Cookie
+```
+
+The list is extensible — add any response header name to relay additional headers from the auth platform.
 
 ## Observability
 
@@ -538,6 +625,7 @@ Multi-stage build:
 | `GATEWAY_RATE_LIMIT_REQUESTEDTOKENS` | No | `1` | Tokens consumed per request |
 | `GATEWAY_RATE_LIMIT_DENYEMPTYKEY` | No | `true` | Deny requests with empty rate limit key |
 | `GATEWAY_RATE_LIMIT_EMPTYKEYSTATUS` | No | `401` | HTTP status for empty key denial |
+| `GATEWAY_AUTHENTICATION_REMOTE_RELAYRESPONSEHEADERS` | No | `Authorization,Set-Cookie` | Comma-separated response headers to relay from auth platform |
 | `GATEWAY_CIRCUIT_BREAKER_ENABLED` | No | `false` | Enables custom circuit breaker configuration |
 
 ### Logging

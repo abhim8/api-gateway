@@ -2,8 +2,6 @@ package gateway.auth;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 class MockAuthenticationProviderTest {
@@ -22,9 +20,10 @@ class MockAuthenticationProviderTest {
     void shouldReturnExpectedDefaultValues() {
         var result = provider.authenticate(null).block();
 
+        assertNotNull(result);
         assertEquals("mock-user", result.subject());
         assertTrue(result.roles().isEmpty());
         assertTrue(result.permissions().isEmpty());
-        assertEquals(Map.of(), result.claims());
+        assertNull(result.claims());
     }
 }

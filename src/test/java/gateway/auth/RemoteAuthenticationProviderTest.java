@@ -1,6 +1,7 @@
 package gateway.auth;
 
 import gateway.auth.dto.AuthenticationHeaders;
+import gateway.auth.properties.RemoteAuthenticationProperties;
 import gateway.common.util.HeaderConstants;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.buffer.DefaultDataBufferFactory;
@@ -34,13 +35,14 @@ class RemoteAuthenticationProviderTest {
         String json = """
                 {
                     "authenticated": true,
-                    "subject": "user-123",
-                    "username": "abhilash",
-                    "email": "abhilash@example.com",
-                    "roles": ["USER", "ADMIN"],
-                    "permissions": ["template.read", "template.write"],
-                    "expiresAt": "2026-12-31T23:59:59Z",
-                    "metadata": { "tenantId": "tenant-001" }
+                    "claims": {
+                        "subject": "user-123",
+                        "username": "abhilash",
+                        "email": "abhilash@example.com",
+                        "roles": ["USER", "ADMIN"],
+                        "permissions": ["template.read", "template.write"],
+                        "tenantId": "tenant-001"
+                    }
                 }
                 """;
 
@@ -52,10 +54,10 @@ class RemoteAuthenticationProviderTest {
                     assertEquals("user-123", result.subject());
                     assertEquals(List.of("USER", "ADMIN"), result.roles());
                     assertEquals(List.of("template.read", "template.write"), result.permissions());
-                    assertEquals("abhilash", result.claims().get(RemoteAuthenticationProvider.CLAIMS_USERNAME));
-                    assertEquals("abhilash@example.com", result.claims().get(RemoteAuthenticationProvider.CLAIMS_EMAIL));
-                    assertEquals("tenant-001", result.claims().get(RemoteAuthenticationProvider.CLAIMS_TENANT_ID));
-                    assertEquals("2026-12-31T23:59:59Z", result.claims().get(RemoteAuthenticationProvider.CLAIMS_EXPIRES_AT));
+                    assertEquals("abhilash", result.claims().username());
+                    assertEquals("abhilash@example.com", result.claims().email());
+                    assertEquals("tenant-001", result.claims().tenantId());
+                    assertEquals("user-123", result.claims().subject());
                 })
                 .verifyComplete();
     }
@@ -65,7 +67,9 @@ class RemoteAuthenticationProviderTest {
         String json = """
                 {
                     "authenticated": true,
-                    "subject": "user-456"
+                    "claims": {
+                        "subject": "user-456"
+                    }
                 }
                 """;
 
@@ -77,7 +81,11 @@ class RemoteAuthenticationProviderTest {
                     assertEquals("user-456", result.subject());
                     assertTrue(result.roles().isEmpty());
                     assertTrue(result.permissions().isEmpty());
-                    assertTrue(result.claims().isEmpty());
+                    assertNotNull(result.claims());
+                    assertEquals("user-456", result.claims().subject());
+                    assertNull(result.claims().username());
+                    assertNull(result.claims().email());
+                    assertNull(result.claims().tenantId());
                 })
                 .verifyComplete();
     }
@@ -198,7 +206,9 @@ class RemoteAuthenticationProviderTest {
         String json = """
                 {
                     "authenticated": true,
-                    "subject": "user-123"
+                    "claims": {
+                        "subject": "user-123"
+                    }
                 }
                 """;
 
@@ -343,6 +353,204 @@ class RemoteAuthenticationProviderTest {
         assertNull(headers.authorization());
     }
 
+    @Test
+    void shouldRelayAuthorizationResponseHeaderUnchanged() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-123"
+                    }
+                }
+                """;
+
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer relayed-token-789")
+                .body(Flux.just(BUFFER_FACTORY.wrap(json.getBytes(StandardCharsets.UTF_8))))
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer original-token", "corr-123")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    assertEquals("Bearer relayed-token-789",
+                            result.relayResponseHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldRelaySetCookieResponseHeaderUnchanged() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-123"
+                    }
+                }
+                """;
+
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.SET_COOKIE, "session=relayed-session-id; Path=/")
+                .body(Flux.just(BUFFER_FACTORY.wrap(json.getBytes(StandardCharsets.UTF_8))))
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer token", "corr-123")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    assertEquals("session=relayed-session-id; Path=/",
+                            result.relayResponseHeaders().getFirst(HttpHeaders.SET_COOKIE));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldRelayMultipleSetCookieHeaders() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-123"
+                    }
+                }
+                """;
+
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.SET_COOKIE, "session=abc; Path=/")
+                .header(HttpHeaders.SET_COOKIE, "theme=dark; Path=/")
+                .body(Flux.just(BUFFER_FACTORY.wrap(json.getBytes(StandardCharsets.UTF_8))))
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer token", "corr-123")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    List<String> cookies = result.relayResponseHeaders().get(HttpHeaders.SET_COOKIE);
+                    assertNotNull(cookies);
+                    assertEquals(2, cookies.size());
+                    assertTrue(cookies.contains("session=abc; Path=/"));
+                    assertTrue(cookies.contains("theme=dark; Path=/"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldIgnoreUnsupportedResponseHeaders() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-123"
+                    }
+                }
+                """;
+
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header("X-Custom-Header", "should-not-be-relayed")
+                .header("X-Other", "also-ignored")
+                .body(Flux.just(BUFFER_FACTORY.wrap(json.getBytes(StandardCharsets.UTF_8))))
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer token", "corr-123")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    assertTrue(result.relayResponseHeaders().isEmpty());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldNotRelayResponseHeadersWhenNoneMatch() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-123"
+                    }
+                }
+                """;
+
+        RemoteAuthenticationProvider provider = providerWithJsonResponse(json, HttpStatus.OK);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer token", "corr-123")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    assertTrue(result.relayResponseHeaders().isEmpty());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldNotRelayResponseHeadersWhenUnauthenticated() {
+        ClientResponse response = ClientResponse.create(HttpStatus.UNAUTHORIZED)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer should-not-be-relayed")
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer invalid", "corr-123")))
+                .assertNext(result -> {
+                    assertFalse(result.authenticated());
+                    assertNull(result.subject());
+                    assertTrue(result.relayResponseHeaders().isEmpty());
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldPreserveExistingAuthenticationBehavior() {
+        String json = """
+                {
+                    "authenticated": true,
+                    "claims": {
+                        "subject": "user-789",
+                        "username": "existing-user",
+                        "email": "existing@example.com",
+                        "roles": ["USER"],
+                        "permissions": ["read"],
+                        "tenantId": "tenant-002"
+                    }
+                }
+                """;
+
+        ClientResponse response = ClientResponse.create(HttpStatus.OK)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer relayed")
+                .header(HttpHeaders.SET_COOKIE, "session=existing-session; Path=/")
+                .body(Flux.just(BUFFER_FACTORY.wrap(json.getBytes(StandardCharsets.UTF_8))))
+                .build();
+
+        RemoteAuthenticationProvider provider = providerWithResponse(response);
+
+        StepVerifier.create(provider.authenticate(exchange("Bearer original", "corr-789")))
+                .assertNext(result -> {
+                    assertTrue(result.authenticated());
+                    assertEquals("user-789", result.subject());
+                    assertEquals(List.of("USER"), result.roles());
+                    assertEquals(List.of("read"), result.permissions());
+                    assertEquals("existing-user", result.claims().username());
+                    assertEquals("existing@example.com", result.claims().email());
+                    assertEquals("tenant-002", result.claims().tenantId());
+
+                    assertEquals("Bearer relayed",
+                            result.relayResponseHeaders().getFirst(HttpHeaders.AUTHORIZATION));
+                    assertEquals("session=existing-session; Path=/",
+                            result.relayResponseHeaders().getFirst(HttpHeaders.SET_COOKIE));
+                })
+                .verifyComplete();
+    }
+
     private static RemoteAuthenticationProvider providerWithJsonResponse(String body, HttpStatus status) {
         byte[] raw = body.getBytes(StandardCharsets.UTF_8);
         ClientResponse response = ClientResponse.create(status)
@@ -360,7 +568,9 @@ class RemoteAuthenticationProviderTest {
         WebClient webClient = WebClient.builder()
                 .exchangeFunction(exchangeFunction)
                 .build();
-        return new RemoteAuthenticationProvider(webClient);
+        RemoteAuthenticationProperties properties = new RemoteAuthenticationProperties();
+        properties.setRelayResponseHeaders(List.of("Authorization", "Set-Cookie"));
+        return new RemoteAuthenticationProvider(webClient, properties);
     }
 
     private static ServerWebExchange exchange(String authorization, String correlationId) {

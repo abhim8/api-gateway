@@ -1,9 +1,11 @@
 package gateway.auth;
 
+import gateway.auth.dto.AuthenticationClaims;
 import gateway.auth.dto.AuthenticationHeaders;
 import gateway.auth.dto.AuthValidationRequest;
 import gateway.auth.dto.AuthValidationResponse;
 import gateway.auth.dto.AuthenticationResult;
+import gateway.auth.properties.RemoteAuthenticationProperties;
 import gateway.common.util.HeaderConstants;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +19,6 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.UUID;
 
@@ -27,12 +28,9 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
 
     static final String AUTH_VALIDATE_PATH = "/internal/v1/auth/validate";
     static final String GATEWAY_USER_AGENT = "api-gateway";
-    static final String CLAIMS_USERNAME = "username";
-    static final String CLAIMS_EMAIL = "email";
-    static final String CLAIMS_EXPIRES_AT = "expiresAt";
-    static final String CLAIMS_TENANT_ID = "tenantId";
 
     private final WebClient webClient;
+    private final RemoteAuthenticationProperties properties;
 
     @Override
     public Mono<AuthenticationResult> authenticate(ServerWebExchange exchange) {
@@ -59,18 +57,41 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
                         correlationId != null ? correlationId : UUID.randomUUID().toString(),
                         authHeaders))
                 .retrieve()
-                .bodyToMono(AuthValidationResponse.class)
-                .map(response -> {
-                    log.info("Authentication latency: {}ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
-                    if (!response.authenticated()) {
+                .toEntity(AuthValidationResponse.class)
+                .flatMap(responseEntity -> {
+                    long elapsed = Duration.ofNanos(System.nanoTime() - start).toMillis();
+                    log.info("Authentication latency: {}ms", elapsed);
+
+                    AuthValidationResponse response = responseEntity.getBody();
+                    if (response == null || !response.authenticated()) {
                         log.warn("Remote authentication failed - not authenticated");
-                        return AuthenticationResult.unauthenticated();
+                        return Mono.just(AuthenticationResult.unauthenticated());
                     }
-                    log.debug("Remote authentication successful - subject: {}", response.subject());
-                    return toResult(response);
+
+                    AuthenticationClaims claims = response.claims();
+                    String subject = claims != null ? claims.subject() : null;
+                    log.debug("Remote authentication successful - subject: {}", subject);
+
+                    AuthenticationResult result = toResult(response);
+
+                    List<String> relayHeaders = properties.getRelayResponseHeaders();
+                    if (relayHeaders != null) {
+                        HttpHeaders authResponseHeaders = responseEntity.getHeaders();
+                        for (String headerName : relayHeaders) {
+                            List<String> values = authResponseHeaders.get(headerName);
+                            if (values != null && !values.isEmpty()) {
+                                log.debug("Relaying response header: {}", headerName);
+                                values.forEach(value ->
+                                        result.relayResponseHeaders().add(headerName, value));
+                            }
+                        }
+                    }
+
+                    return Mono.just(result);
                 })
                 .onErrorResume(WebClientResponseException.class, e -> {
-                    log.info("Authentication latency: {}ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
+                    long elapsed = Duration.ofNanos(System.nanoTime() - start).toMillis();
+                    log.info("Authentication latency: {}ms", elapsed);
                     if (e.getStatusCode() == HttpStatus.UNAUTHORIZED) {
                         log.warn("Remote authentication failed - invalid credentials (401)");
                         return Mono.just(AuthenticationResult.unauthenticated());
@@ -80,7 +101,8 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
                             "Remote authentication service unavailable"));
                 })
                 .onErrorResume(throwable -> {
-                    log.info("Authentication latency: {}ms", Duration.ofNanos(System.nanoTime() - start).toMillis());
+                    long elapsed = Duration.ofNanos(System.nanoTime() - start).toMillis();
+                    log.info("Authentication latency: {}ms", elapsed);
                     log.error("Remote authentication service unavailable: {}", throwable.getMessage());
                     return Mono.error(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                             "Remote authentication service unavailable"));
@@ -125,26 +147,14 @@ public class RemoteAuthenticationProvider implements AuthenticationProvider {
     }
 
     private AuthenticationResult toResult(AuthValidationResponse response) {
-        HashMap<String, Object> claims = new HashMap<>();
-        if (response.username() != null) {
-            claims.put(CLAIMS_USERNAME, response.username());
-        }
-        if (response.email() != null) {
-            claims.put(CLAIMS_EMAIL, response.email());
-        }
-        if (response.expiresAt() != null) {
-            claims.put(CLAIMS_EXPIRES_AT, response.expiresAt().toString());
-        }
-        if (response.metadata() != null && response.metadata().containsKey(CLAIMS_TENANT_ID)) {
-            claims.put(CLAIMS_TENANT_ID, response.metadata().get(CLAIMS_TENANT_ID));
-        }
-
+        AuthenticationClaims claims = response.claims();
         return new AuthenticationResult(
                 true,
-                response.subject(),
-                response.roles() != null ? response.roles() : List.of(),
-                response.permissions() != null ? response.permissions() : List.of(),
-                claims
+                claims != null ? claims.subject() : null,
+                claims != null && claims.roles() != null ? claims.roles() : List.of(),
+                claims != null && claims.permissions() != null ? claims.permissions() : List.of(),
+                claims,
+                new HttpHeaders()
         );
     }
 }

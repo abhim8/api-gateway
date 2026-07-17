@@ -5,6 +5,7 @@ import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.List;
 
 @Setter
 @Getter
@@ -14,4 +15,5 @@ public class RemoteAuthenticationProperties {
     private String baseUrl;
     private Duration connectTimeout;
     private Duration readTimeout;
+    private List<String> relayResponseHeaders;
 }

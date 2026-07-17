@@ -80,6 +80,9 @@ gateway:
       base-url: http://localhost:8004
       connect-timeout: 2s
       read-timeout: 5s
+      relay-response-headers:
+        - Authorization
+        - Set-Cookie
   logging:
     request-timing:
       enabled: true
