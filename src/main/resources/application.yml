@@ -75,7 +75,7 @@ management:
 
 gateway:
   authentication:
-    provider: mock
+    provider: remote
     remote:
       base-url: http://localhost:8004
       connect-timeout: 2s
