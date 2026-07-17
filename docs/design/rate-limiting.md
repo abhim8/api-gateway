@@ -293,7 +293,7 @@ These metrics allow operators to track rate-limit effectiveness and detect clien
 
 **Custom rate-limit headers**: The gateway can return `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset` headers by wrapping the `RedisRateLimiter` response or implementing a custom `RateLimiter`.
 
-**Distributed rate limiting with Redis Cluster**: The Redis configuration supports both standalone and cluster modes. In cluster mode, rate-limit keys are sharded among cluster nodes. No code changes are required — the `LettuceConnectionFactory` configured in `RedisConfig` handles cluster routing transparently.
+**Distributed rate limiting with Redis Cluster**: The Redis configuration supports both standalone and cluster modes. In cluster mode, rate-limit keys are sharded among cluster nodes. No code changes are required - the `LettuceConnectionFactory` configured in `RedisConfig` handles cluster routing transparently.
 
 **Alternative rate-limit algorithms**: If token bucket proves unsuitable for a use case (e.g., exact request spacing for a real-time API), a custom `RateLimiter` implementation can be swapped in without changing the route configuration. The `RequestRateLimiterGatewayFilterFactory` accepts any Spring bean implementing `RateLimiter`.
 

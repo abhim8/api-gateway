@@ -10,7 +10,7 @@ Stateless, reactive front-door proxy for a microservices platform. Built with Sp
 
 ## Project Overview
 
-The API Gateway is the single entry point for all external traffic into the platform's microservices ecosystem. It owns cross-cutting concerns so upstream services do not have to. The gateway is authentication-mechanism agnostic — it forwards the full authentication context to an external authentication platform without interpreting any credential format.
+The API Gateway is the single entry point for all external traffic into the platform's microservices ecosystem. It owns cross-cutting concerns so upstream services do not have to. The gateway is authentication-mechanism agnostic - it forwards the full authentication context to an external authentication platform without interpreting any credential format.
 
 **Responsibilities**
 
@@ -255,7 +255,7 @@ TEMPLATE_SERVICE_URL=http://template-service:8002 docker compose up --build
 
 ## Authentication
 
-Authentication is delegated to a pluggable `AuthenticationProvider` abstraction. Every request passes through `AuthenticationGlobalFilter` (order -75) before route matching, which calls the configured provider. The gateway is **authentication-mechanism agnostic** — it forwards the full authentication context (13 header fields) to the external service without interpreting Bearer, Basic, API key, Cookie, or any other credential format.
+Authentication is delegated to a pluggable `AuthenticationProvider` abstraction. Every request passes through `AuthenticationGlobalFilter` (order -75) before route matching, which calls the configured provider. The gateway is **authentication-mechanism agnostic** - it forwards the full authentication context (13 header fields) to the external service without interpreting Bearer, Basic, API key, Cookie, or any other credential format.
 
 ```mermaid
 graph LR
@@ -275,7 +275,7 @@ graph LR
 | Mode | Provider | Description |
 |------|----------|-------------|
 | `mock` (default) | `MockAuthenticationProvider` | Always returns `authenticated = true` with subject `"mock-user"`. Zero I/O - no HTTP, no JWT, no crypto. Suitable for local development and testing. |
-| `remote` | `RemoteAuthenticationProvider` | Forwards the full authentication context (Authorization, Cookie, X-API-Key, and 10 forwarding headers) to an external authentication platform via `POST /internal/v1/auth/validate`. The gateway never interprets, decodes, or validates credentials — it passes the headers unchanged. After successful authentication, configured response headers from the auth platform are relayed to the client. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
+| `remote` | `RemoteAuthenticationProvider` | Forwards the full authentication context (Authorization, Cookie, X-API-Key, and 10 forwarding headers) to an external authentication platform via `POST /internal/v1/auth/validate`. The gateway never interprets, decodes, or validates credentials - it passes the headers unchanged. After successful authentication, configured response headers from the auth platform are relayed to the client. When configured, `RemoteAuthenticationProvider` is wired automatically via `@ConditionalOnProperty`. |
 
 Configure via `GATEWAY_AUTHENTICATION_PROVIDER` environment variable or `gateway.authentication.provider` in `application.yml`. Set to `mock` (default) for local development or `remote` for deployments with an external authentication service.
 
@@ -363,7 +363,7 @@ gateway:
         - Set-Cookie
 ```
 
-The list is extensible — add any response header name to relay additional headers from the auth platform.
+The list is extensible - add any response header name to relay additional headers from the auth platform.
 
 ## Observability
 
@@ -413,7 +413,7 @@ Configured under `gateway.logging.request-timing`:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `gateway.logging.request-timing.enabled` | `true` | Enables the timing filter |
-| `gateway.logging.request-timing.slow-request-threshold` | `5000ms` | Duration threshold above which a request is logged at WARN |
+| `gateway.logging.request-timing.slow-request-threshold` | `1000ms` | Duration threshold above which a request is logged at WARN |
 
 The filter is fully non-blocking (WebFlux), uses `System.nanoTime()` for precision, and never throws exceptions from the logging path.
 
@@ -541,6 +541,8 @@ gateway:
       permitted-number-of-calls-in-half-open-state: 3
     routes:
       template-service:
+        enabled: true
+        circuit-breaker-name: template-service
         sliding-window-size: 5
         failure-rate-threshold: 25
 ```

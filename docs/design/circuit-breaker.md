@@ -294,7 +294,7 @@ The `FallbackController` at `/fallback` returns a structured JSON response:
   "error": "Service Unavailable",
   "route": "template-service",
   "correlationId": "abc-123",
-  "timestamp": "2026-07-15T20:28:25.192Z"
+  "timestamp": "2026-07-15T20:28:25.192"
 }
 ```
 
@@ -388,7 +388,7 @@ The performance impact of circuit breaking at the gateway is primarily a reducti
 
 **Bulkhead isolation**: Resilience4j also provides a bulkhead pattern that limits concurrent calls to a service. It can be added alongside the circuit breaker to limit the number of in-flight requests to an upstream, preventing connection pool exhaustion even when the circuit is closed.
 
-**Event-driven alerts**: Resilience4j's `CircuitBreakerEventPublisher` emits custom events for monitoring systems — for example, forwarding circuit breaker state changes to a webhook or logging structured events for analysis.
+**Event-driven alerts**: Resilience4j's `CircuitBreakerEventPublisher` emits custom events for monitoring systems - for example, forwarding circuit breaker state changes to a webhook or logging structured events for analysis.
 
 **Per-instance circuit breakers**: The implementation creates one circuit breaker per route name. For services running multiple instances behind a load balancer, per-instance circuit breakers (e.g., using instance metadata from discovery) allow failing over individual instances rather than the entire service.
 
