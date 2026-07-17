@@ -1,8 +1,12 @@
 ![Java](https://img.shields.io/badge/Java-26-orange)
-![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.0-brightgreen)
+![Spring Boot](https://img.shields.io/badge/Spring_Boot-4.1-brightgreen)
 ![License](https://img.shields.io/badge/License-Apache_2.0-blue)
 ![Build](https://github.com/abhim8/api-gateway/actions/workflows/build.yml/badge.svg)
 ![Spring Cloud Gateway](https://img.shields.io/badge/Spring_Cloud_Gateway-5.x-6DB33F)
+![Spring WebFlux](https://img.shields.io/badge/WebFlux-Reactive-6DB33F)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-Enabled-7B42BC)
+![Micrometer](https://img.shields.io/badge/Micrometer-Metrics-00B8D9)
+![Docker](https://img.shields.io/badge/Docker-Supported-2496ED)
 
 # API Gateway
 
