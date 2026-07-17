@@ -107,7 +107,7 @@ public class GlobalExceptionHandler implements ErrorWebExceptionHandler {
         String correlationId = resolveCorrelationId(exchange);
 
         if (status == HttpStatus.NOT_FOUND) {
-            log.debug("Request {} {} {} failed with 404", method, path, correlationId != null ? correlationId : "");
+            log.debug("Request {} {} {} {} failed with 404", method, path, correlationId != null ? correlationId : "", throwable.getMessage());
         } else if (status.is4xxClientError()) {
             log.warn("Request {} {} {} failed with {} {}", method, path,
                     correlationId != null ? correlationId : "",

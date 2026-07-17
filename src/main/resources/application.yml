@@ -34,6 +34,10 @@ spring:
                 allowCredentials: true
                 maxAge: 1800
           routes:
+            - id: auth
+              uri: ${AUTH_PLATFORM_URL:http://localhost:8004}
+              predicates:
+                - Path=/internal/v1/auth/**,/internal/v1/api-keys/**
             - id: template-service
               uri: ${TEMPLATE_SERVICE_URL:http://localhost:8002}
               predicates:
